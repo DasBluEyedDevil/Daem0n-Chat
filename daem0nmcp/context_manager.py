@@ -63,6 +63,9 @@ class UserContext:
     # Covenant state tracking
     briefed: bool = False  # True after get_briefing called
     context_checks: List[Dict[str, Any]] = field(default_factory=list)  # Timestamped context checks
+    # Multi-user identity tracking
+    current_user: str = "default"  # Active user for this session
+    known_users: List[str] = field(default_factory=list)  # All users on this device
 
 
 # Cache of user contexts by normalized path

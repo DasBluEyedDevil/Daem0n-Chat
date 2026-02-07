@@ -72,6 +72,9 @@ class Memory(Base):
     # Multi-category support: JSON array of category strings
     categories = Column(JSON, nullable=False, default=list)
 
+    # Which user this memory belongs to (multi-user isolation)
+    user_name = Column(String, nullable=False, default="default", index=True)
+
     # The actual content
     content = Column(Text, nullable=False)
 
@@ -397,6 +400,9 @@ class ActiveContextItem(Base):
     # Which user this belongs to
     user_id = Column(String, nullable=False, index=True)
 
+    # Multi-user isolation
+    user_name = Column(String, nullable=False, default="default", index=True)
+
     # The memory to keep in active context
     memory_id = Column(Integer, ForeignKey("memories.id", ondelete="CASCADE"), nullable=False)
 
@@ -438,6 +444,9 @@ class MemoryCommunity(Base):
 
     # Which user this belongs to
     user_id = Column(String, nullable=False, index=True)
+
+    # Multi-user isolation
+    user_name = Column(String, nullable=False, default="default", index=True)
 
     # Human-readable name (auto-generated from dominant tags)
     name = Column(String, nullable=False)
@@ -489,6 +498,7 @@ class ExtractedEntity(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, nullable=False, index=True)
+    user_name = Column(String, nullable=False, default="default", index=True)
     entity_type = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
     qualified_name = Column(String, nullable=True, index=True)

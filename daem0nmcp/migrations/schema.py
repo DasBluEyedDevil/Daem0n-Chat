@@ -288,6 +288,21 @@ MIGRATIONS: List[Tuple[int, str, List[str]]] = [
         "ALTER TABLE extracted_entities ADD COLUMN user_id TEXT;",
         "UPDATE extracted_entities SET user_id = project_path WHERE user_id IS NULL;",
     ]),
+    (18, "Add user_name column for multi-user support", [
+        # Memories table
+        "ALTER TABLE memories ADD COLUMN user_name TEXT DEFAULT 'default';",
+        "UPDATE memories SET user_name = 'default' WHERE user_name IS NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_memories_user_name ON memories(user_name);",
+        # Active context table
+        "ALTER TABLE active_context ADD COLUMN user_name TEXT DEFAULT 'default';",
+        "UPDATE active_context SET user_name = 'default' WHERE user_name IS NULL;",
+        # Memory communities table
+        "ALTER TABLE memory_communities ADD COLUMN user_name TEXT DEFAULT 'default';",
+        "UPDATE memory_communities SET user_name = 'default' WHERE user_name IS NULL;",
+        # Extracted entities table
+        "ALTER TABLE extracted_entities ADD COLUMN user_name TEXT DEFAULT 'default';",
+        "UPDATE extracted_entities SET user_name = 'default' WHERE user_name IS NULL;",
+    ]),
 ]
 
 
