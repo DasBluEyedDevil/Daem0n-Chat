@@ -28,21 +28,18 @@ from sqlalchemy import select, func, or_
 logger = logging.getLogger(__name__)
 
 
-def _days_ago(created_at: datetime) -> int:
-    """Calculate days since a memory was created."""
+def _days_ago(dt: datetime) -> int:
+    """Days since datetime."""
     now = datetime.now(timezone.utc)
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    delta = now - created_at
-    return max(0, delta.days)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0, (now - dt).days)
 
 
-def _summarize_content(content: str, max_len: int = 80) -> str:
-    """Summarize content to a short phrase."""
+def _summarize(content: str, max_len: int = 80) -> str:
+    """Truncate content to max length."""
     content = content.strip()
-    if len(content) <= max_len:
-        return content
-    return content[:max_len - 3] + "..."
+    return content if len(content) <= max_len else content[:max_len - 3] + "..."
 
 
 @mcp.tool(version=__version__)
@@ -102,27 +99,17 @@ async def daem0n_briefing(
     # 2. Unresolved threads: concerns and goals without outcomes
     unresolved_threads = []
     async with ctx.db_manager.get_session() as session:
-        # Find concerns and goals without outcomes
         result = await session.execute(
-            select(Memory)
-            .where(
+            select(Memory).where(
                 Memory.outcome.is_(None),
-                or_(
-                    Memory.archived == False,
-                    Memory.archived.is_(None)
-                )
-            )
-            .order_by(Memory.created_at.desc())
-            .limit(20)
+                or_(Memory.archived == False, Memory.archived.is_(None))
+            ).order_by(Memory.created_at.desc()).limit(20)
         )
-        candidates = result.scalars().all()
-
-        for mem in candidates:
+        for mem in result.scalars().all():
             cats = mem.categories or []
             if "concern" in cats or "goal" in cats:
                 unresolved_threads.append({
-                    "id": mem.id,
-                    "summary": _summarize_content(mem.content),
+                    "id": mem.id, "summary": _summarize(mem.content),
                     "category": "concern" if "concern" in cats else "goal",
                     "days_ago": _days_ago(mem.created_at),
                 })
@@ -134,22 +121,13 @@ async def daem0n_briefing(
     recent_topics = []
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
-            select(Memory)
-            .where(
-                or_(
-                    Memory.archived == False,
-                    Memory.archived.is_(None)
-                )
-            )
-            .order_by(Memory.created_at.desc())
-            .limit(5)
+            select(Memory).where(
+                or_(Memory.archived == False, Memory.archived.is_(None))
+            ).order_by(Memory.created_at.desc()).limit(5)
         )
-        recent_mems = result.scalars().all()
-
-        for mem in recent_mems:
+        for mem in result.scalars().all():
             recent_topics.append({
-                "id": mem.id,
-                "summary": _summarize_content(mem.content),
+                "id": mem.id, "summary": _summarize(mem.content),
                 "days_ago": _days_ago(mem.created_at),
             })
             if mem.id not in memory_ids:
@@ -159,23 +137,14 @@ async def daem0n_briefing(
     emotional_context = None
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
-            select(Memory)
-            .where(
+            select(Memory).where(
                 Memory.created_at >= seven_days_ago.replace(tzinfo=None),
-                or_(
-                    Memory.archived == False,
-                    Memory.archived.is_(None)
-                )
-            )
-            .order_by(Memory.created_at.desc())
-            .limit(10)
+                or_(Memory.archived == False, Memory.archived.is_(None))
+            ).order_by(Memory.created_at.desc()).limit(10)
         )
-        recent_mems = result.scalars().all()
-
-        for mem in recent_mems:
-            cats = mem.categories or []
-            if "emotion" in cats:
-                emotional_context = _summarize_content(mem.content, 100)
+        for mem in result.scalars().all():
+            if "emotion" in (mem.categories or []):
+                emotional_context = _summarize(mem.content, 100)
                 if mem.id not in memory_ids:
                     memory_ids.append(mem.id)
                 break
@@ -189,7 +158,7 @@ async def daem0n_briefing(
         user_id=ctx.user_id,
     )
     for mem in routine_result.get("memories", []):
-        active_routines.append(_summarize_content(mem["content"], 60))
+        active_routines.append(_summarize(mem["content"], 60))
         if mem["id"] not in memory_ids:
             memory_ids.append(mem["id"])
 
