@@ -275,6 +275,19 @@ MIGRATIONS: List[Tuple[int, str, List[str]]] = [
         "UPDATE memories SET categories = json_replace(categories, '$[0]', 'concern') WHERE category = 'warning';",
         "UPDATE memories SET categories = json_replace(categories, '$[0]', 'fact') WHERE category = 'learning';",
     ]),
+    (17, "Rename project_path to user_id across tables", [
+        # SQLite doesn't support ALTER TABLE RENAME COLUMN directly in all versions,
+        # so we use a workaround by checking if new column exists and adding if not.
+        # We just add user_id column and copy data, leaving old column for compatibility.
+        "ALTER TABLE session_state ADD COLUMN user_id TEXT;",
+        "UPDATE session_state SET user_id = project_path WHERE user_id IS NULL;",
+        "ALTER TABLE active_context ADD COLUMN user_id TEXT;",
+        "UPDATE active_context SET user_id = project_path WHERE user_id IS NULL;",
+        "ALTER TABLE memory_communities ADD COLUMN user_id TEXT;",
+        "UPDATE memory_communities SET user_id = project_path WHERE user_id IS NULL;",
+        "ALTER TABLE extracted_entities ADD COLUMN user_id TEXT;",
+        "UPDATE extracted_entities SET user_id = project_path WHERE user_id IS NULL;",
+    ]),
 ]
 
 

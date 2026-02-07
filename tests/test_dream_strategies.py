@@ -88,7 +88,7 @@ def _make_scheduler(user_active_set: bool = False):
 
 
 def _make_ctx(memories_from_db=None, recall_result=None, review_memories=None):
-    """Create a mock ProjectContext with db_manager and memory_manager.
+    """Create a mock UserContext with db_manager and memory_manager.
 
     Args:
         memories_from_db: Failed decisions returned by the first DB query.
@@ -98,7 +98,7 @@ def _make_ctx(memories_from_db=None, recall_result=None, review_memories=None):
             returns different results on successive calls.
     """
     ctx = MagicMock()
-    ctx.project_path = "/test/project"
+    ctx.user_id = "/test/project"
 
     # --- db_manager.get_session() as async context manager ---
     mock_session = AsyncMock()
@@ -136,7 +136,7 @@ def _make_ctx(memories_from_db=None, recall_result=None, review_memories=None):
 
 def _make_session():
     """Create a fresh DreamSession for testing."""
-    return DreamSession(project_path="/test/project")
+    return DreamSession(user_id="/test/project")
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +305,7 @@ class TestPersistCalledForInsights:
 
         call_index = 0
 
-        async def mock_recall(topic, limit=5, project_path=None):
+        async def mock_recall(topic, limit=5, user_id=None):
             nonlocal call_index
             call_index += 1
             if call_index == 1:
@@ -544,7 +544,7 @@ def _make_connection_ctx(
         link_result: Return value of memory_manager.link_memories().
     """
     ctx = MagicMock()
-    ctx.project_path = "/test/project"
+    ctx.user_id = "/test/project"
     ctx.memory_manager.link_memories = AsyncMock(
         return_value=link_result or {"status": "created", "id": 1}
     )

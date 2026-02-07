@@ -57,7 +57,7 @@ FAILED_DECISION_BOOST = 1.5  # Failed decisions are valuable warnings
 WARNING_BOOST = 1.2  # Warnings get moderate boost
 
 
-def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[Optional[str], Optional[str]]:
+def _normalize_file_path(file_path: Optional[str], user_id: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize a file path to both absolute and project-relative forms.
 
@@ -65,7 +65,7 @@ def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[O
 
     Args:
         file_path: The file path to normalize (can be absolute or relative)
-        project_path: The project root path
+        user_id: The project root path
 
     Returns:
         Tuple of (absolute_path, relative_path)
@@ -78,14 +78,14 @@ def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[O
 
     # Make absolute if not already
     if not path.is_absolute():
-        path = Path(project_path) / path
+        path = Path(user_id) / path
 
     resolved = path.resolve()
     absolute = str(resolved)
 
     # Compute relative path from project root
     try:
-        project_root = Path(project_path).resolve()
+        project_root = Path(user_id).resolve()
         relative = resolved.relative_to(project_root).as_posix()
     except ValueError:
         # Path is outside project root, keep a stable path for matching
@@ -406,7 +406,7 @@ class MemoryManager:
         context: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
         file_path: Optional[str] = None,
-        project_path: Optional[str] = None,
+        user_id: Optional[str] = None,
         happened_at: Optional[datetime] = None,
         source_client: Optional[str] = None,
         source_model: Optional[str] = None,
@@ -424,7 +424,7 @@ class MemoryManager:
             context: Structured context (files, alternatives, etc.)
             tags: Tags for retrieval
             file_path: Optional file path to associate this memory with
-            project_path: Optional project root path for normalizing file paths
+            user_id: Optional project root path for normalizing file paths
             happened_at: When this fact was true in reality (default: now).
                         Use for backfilling: "User told me last week they prefer Python"
                         Pass a datetime with timezone or naive datetime (treated as UTC).
@@ -469,8 +469,8 @@ class MemoryManager:
         # Normalize file path if provided
         file_path_abs = file_path
         file_path_rel = None
-        if file_path and project_path:
-            file_path_abs, file_path_rel = _normalize_file_path(file_path, project_path)
+        if file_path and user_id:
+            file_path_abs, file_path_rel = _normalize_file_path(file_path, user_id)
 
         memory = Memory(
             categories=categories,
@@ -566,26 +566,26 @@ class MemoryManager:
         # Invalidate knowledge graph cache (new memory added)
         self.invalidate_graph_cache()
 
-        # Auto-extract entities if project_path provided
-        if project_path:
+        # Auto-extract entities if user_id provided
+        if user_id:
             try:
                 from .entity_manager import EntityManager
                 ent_manager = EntityManager(self.db)
                 await ent_manager.process_memory(
                     memory_id=memory_id,
                     content=content,
-                    project_path=project_path,
+                    user_id=user_id,
                     rationale=rationale
                 )
             except Exception as e:
                 logger.debug(f"Entity extraction failed (non-fatal): {e}")
 
         # Track goals in session state for follow-up (like old 'decision' tracking)
-        if 'goal' in categories and project_path:
+        if 'goal' in categories and user_id:
             try:
                 from .enforcement import SessionManager
                 session_mgr = SessionManager(self.db)
-                await session_mgr.add_pending_decision(project_path, result["id"])
+                await session_mgr.add_pending_decision(user_id, result["id"])
             except Exception as e:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
 
@@ -594,7 +594,7 @@ class MemoryManager:
     async def remember_batch(
         self,
         memories: List[Dict[str, Any]],
-        project_path: Optional[str] = None
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Store multiple memories in a single transaction.
@@ -609,7 +609,7 @@ class MemoryManager:
                 - rationale: (optional) Why this is important
                 - tags: (optional) List of tags
                 - file_path: (optional) Associated file path
-            project_path: Project root path for normalizing file paths
+            user_id: Project root path for normalizing file paths
 
         Returns:
             Summary dict with created_count, error_count, ids, and any errors
@@ -694,8 +694,8 @@ class MemoryManager:
                     # Normalize file path if provided
                     file_path_abs = file_path
                     file_path_rel = None
-                    if file_path and project_path:
-                        file_path_abs, file_path_rel = _normalize_file_path(file_path, project_path)
+                    if file_path and user_id:
+                        file_path_abs, file_path_rel = _normalize_file_path(file_path, user_id)
 
                     memory = Memory(
                         categories=categories,
@@ -750,7 +750,7 @@ class MemoryManager:
             results["ids"] = created_ids
 
         # Track goals in session state for follow-up (after commit)
-        if project_path:
+        if user_id:
             try:
                 from .enforcement import SessionManager
                 session_mgr = SessionManager(self.db)
@@ -762,7 +762,7 @@ class MemoryManager:
                 ]
 
                 for goal_id in goal_ids:
-                    await session_mgr.add_pending_decision(project_path, goal_id)
+                    await session_mgr.add_pending_decision(user_id, goal_id)
             except Exception as e:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
 
@@ -1010,7 +1010,7 @@ class MemoryManager:
         limit: int = 10,
         since: Optional[datetime] = None,
         until: Optional[datetime] = None,
-        project_path: Optional[str] = None,
+        user_id: Optional[str] = None,
         include_warnings: bool = True,
         decay_half_life_days: float = 30.0,
         include_linked: bool = False,
@@ -1044,7 +1044,7 @@ class MemoryManager:
             limit: Max memories per category
             since: Only include memories created after this date
             until: Only include memories created before this date
-            project_path: Optional project root for file path normalization
+            user_id: Optional project root for file path normalization
             include_warnings: Always include warnings even if not in categories
             decay_half_life_days: How quickly old memories lose relevance
             include_linked: If True, also search linked projects (read-only)
@@ -1127,8 +1127,8 @@ class MemoryManager:
         if file_path:
             normalized_abs = None
             normalized_rel = None
-            if project_path:
-                normalized_abs, normalized_rel = _normalize_file_path(file_path, project_path)
+            if user_id:
+                normalized_abs, normalized_rel = _normalize_file_path(file_path, user_id)
 
             normalized_filter = file_path.replace('\\', '/')
             if normalized_abs:
@@ -1320,12 +1320,12 @@ class MemoryManager:
             result['temporal_filter'] = 'point_in_time'
 
         # Aggregate from linked projects if requested
-        if include_linked and project_path:
+        if include_linked and user_id:
             from .links import LinkManager
             link_mgr = LinkManager(self.db)
 
             try:
-                linked_managers = await link_mgr.get_linked_db_managers(project_path)
+                linked_managers = await link_mgr.get_linked_db_managers(user_id)
 
                 for linked_path, linked_db in linked_managers:
                     try:
@@ -1340,7 +1340,7 @@ class MemoryManager:
                             limit=limit // 2 if limit > 1 else 1,
                             since=since,
                             until=until,
-                            project_path=linked_path,
+                            user_id=linked_path,
                             include_warnings=include_warnings,
                             decay_half_life_days=decay_half_life_days,
                             include_linked=False  # Don't recurse
@@ -1398,7 +1398,7 @@ class MemoryManager:
     async def recall_with_compression(
         self,
         query: str,
-        project_path: str,
+        user_id: str,
         limit: int = 10,
         include_communities: bool = True,
         **kwargs,
@@ -1413,7 +1413,7 @@ class MemoryManager:
 
         Args:
             query: Search query
-            project_path: Project path for community lookup
+            user_id: Project path for community lookup
             limit: Maximum memories to return
             include_communities: Whether to include community summaries
             **kwargs: Additional args passed to recall()
@@ -1428,18 +1428,18 @@ class MemoryManager:
         plan = self.recall_planner.plan_recall(query)
 
         # Get raw memories via existing recall (now returns flat list)
-        result = await self.recall(query, limit=limit, project_path=project_path, **kwargs)
+        result = await self.recall(query, limit=limit, user_id=user_id, **kwargs)
 
         # Get memories from flat list (new format)
         memories = result.get("memories", [])
 
         # Get community summaries if requested
         community_summaries = None
-        if include_communities and project_path:
+        if include_communities and user_id:
             try:
                 from .communities import CommunityManager
                 cm = CommunityManager(self.db)
-                communities = await cm.get_communities(project_path)
+                communities = await cm.get_communities(user_id)
                 # Extract summaries from top communities
                 community_summaries = [
                     c.get("summary", "") for c in communities[:plan.max_communities]
@@ -1476,7 +1476,7 @@ class MemoryManager:
         memory_id: int,
         outcome: str,
         worked: bool,
-        project_path: Optional[str] = None
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Record the outcome of a decision/pattern to learn from it.
@@ -1488,7 +1488,7 @@ class MemoryManager:
             memory_id: The memory to update
             outcome: What actually happened
             worked: Did it work out?
-            project_path: Optional project path for auto-activating failed decisions
+            user_id: Optional project path for auto-activating failed decisions
 
         Returns:
             Updated memory with any auto-generated warnings
@@ -1589,20 +1589,20 @@ class MemoryManager:
         try:
             from .enforcement import SessionManager
             session_mgr = SessionManager(self.db)
-            # Use passed project_path or fall back to current working directory
-            effective_project_path = project_path or os.getcwd()
-            await session_mgr.remove_pending_decision(effective_project_path, memory_id)
+            # Use passed user_id or fall back to current working directory
+            effective_user_id = user_id or os.getcwd()
+            await session_mgr.remove_pending_decision(effective_user_id, memory_id)
         except Exception as e:
             logger.debug(f"Session tracking failed (non-fatal): {e}")
 
-        # Auto-add to active context if failed (and project_path provided)
-        if not worked and project_path:
+        # Auto-add to active context if failed (and user_id provided)
+        if not worked and user_id:
             try:
                 from .active_context import ActiveContextManager
                 acm = ActiveContextManager(self.db)
                 truncated_outcome = outcome[:50] + '...' if len(outcome) > 50 else outcome
                 await acm.add_to_context(
-                    project_path=project_path,
+                    user_id=user_id,
                     memory_id=memory_id,
                     reason=f"Auto-activated: Failed decision - {truncated_outcome}",
                     priority=10  # High priority for failures
@@ -1766,7 +1766,7 @@ class MemoryManager:
         self,
         file_path: str,
         limit: int = 10,
-        project_path: Optional[str] = None
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get all memories associated with a specific file.
@@ -1777,16 +1777,16 @@ class MemoryManager:
         Args:
             file_path: The file path to look up
             limit: Max memories to return
-            project_path: Optional project root path for normalizing file paths
+            user_id: Optional project root path for normalizing file paths
 
         Returns:
             Dict with memories organized by category
         """
-        # Normalize the input path if project_path is provided
+        # Normalize the input path if user_id is provided
         normalized_abs = None
         normalized_rel = None
-        if project_path:
-            normalized_abs, normalized_rel = _normalize_file_path(file_path, project_path)
+        if user_id:
+            normalized_abs, normalized_rel = _normalize_file_path(file_path, user_id)
 
         async with self.db.get_session() as session:
             # Query both file_path and file_path_relative columns
@@ -1808,7 +1808,7 @@ class MemoryManager:
                     .limit(limit)
                 )
             else:
-                # Fallback to original behavior if no project_path
+                # Fallback to original behavior if no user_id
                 result = await session.execute(
                     select(Memory)
                     .where(
@@ -2576,7 +2576,7 @@ class MemoryManager:
     async def recall_hierarchical(
         self,
         topic: str,
-        project_path: Optional[str] = None,
+        user_id: Optional[str] = None,
         include_members: bool = False,
         limit: int = 10,
         use_leiden: bool = True
@@ -2593,7 +2593,7 @@ class MemoryManager:
 
         Args:
             topic: What you're looking for
-            project_path: Project path for community lookup
+            user_id: Project path for community lookup
             include_members: If True, include full member content for each community
             limit: Max results per layer
             use_leiden: If True, prefer Leiden-detected communities (default: True)
@@ -2611,14 +2611,14 @@ class MemoryManager:
             "community_source": "none"
         }
 
-        # Get relevant communities if project_path provided
-        if project_path:
+        # Get relevant communities if user_id provided
+        if user_id:
             cm = CommunityManager(self.db)
 
             async with self.db.get_session() as session:
                 # Search communities by topic in name, summary, or tags
                 query = select(MemoryCommunity).where(
-                    MemoryCommunity.project_path == project_path
+                    MemoryCommunity.user_id == user_id
                 )
                 communities_result = await session.execute(query)
                 all_communities = communities_result.scalars().all()
@@ -2692,7 +2692,7 @@ class MemoryManager:
                 result["communities"] = relevant_communities
 
         # Also get individual memories via standard recall
-        memories = await self.recall(topic, limit=limit, project_path=project_path)
+        memories = await self.recall(topic, limit=limit, user_id=user_id)
         result["memories"] = {
             "decisions": memories.get("decisions", []),
             "patterns": memories.get("patterns", []),

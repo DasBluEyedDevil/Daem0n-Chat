@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from sqlalchemy import select
 
 if TYPE_CHECKING:
-    from ..context_manager import ProjectContext
+    from ..context_manager import UserContext
 
 try:
     from ..models import Memory, MemoryVersion
@@ -109,7 +109,7 @@ def _build_context_dict(
 
 async def run_simulation(
     decision_id: int,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> SimulationResult:
     """Perform temporal scrying on a past decision.
 
@@ -119,7 +119,7 @@ async def run_simulation(
 
     Args:
         decision_id: The ``Memory.id`` of the decision to scry.
-        ctx: The active ``ProjectContext`` providing database and
+        ctx: The active ``UserContext`` providing database and
             memory manager access.
 
     Returns:
@@ -163,7 +163,7 @@ async def run_simulation(
 
 async def _run_simulation_inner(
     decision_id: int,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> SimulationResult:
     """Core simulation logic, separated for clean error handling."""
     mm = ctx.memory_manager
@@ -216,7 +216,7 @@ async def _run_simulation_inner(
     historical_recall = await mm.recall(
         topic=query_topic,
         as_of_time=decision_time_dt,
-        project_path=ctx.project_path,
+        user_id=ctx.user_id,
     )
     historical_memories = _extract_memories_from_recall(historical_recall)
     historical_context = _build_context_dict(
@@ -228,7 +228,7 @@ async def _run_simulation_inner(
     # ------------------------------------------------------------------
     current_recall = await mm.recall(
         topic=query_topic,
-        project_path=ctx.project_path,
+        user_id=ctx.user_id,
     )
     current_memories = _extract_memories_from_recall(current_recall)
     current_time_iso = datetime.now(timezone.utc).isoformat()

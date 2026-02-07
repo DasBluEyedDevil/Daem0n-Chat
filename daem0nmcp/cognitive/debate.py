@@ -20,7 +20,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from ..context_manager import ProjectContext
+    from ..context_manager import UserContext
 
 try:
     from ..config import settings
@@ -114,7 +114,7 @@ async def _gather_evidence(
     topic: str,
     position: str,
     perspective: str,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> DebateArgument:
     """Gather evidence for one side of the debate.
 
@@ -132,7 +132,7 @@ async def _gather_evidence(
     """
     recall_result = await ctx.memory_manager.recall(
         topic=f"{topic} {position}",
-        project_path=ctx.project_path,
+        user_id=ctx.user_id,
         limit=10,
     )
 
@@ -165,8 +165,8 @@ async def run_debate(
     topic: str,
     advocate_position: str,
     challenger_position: str,
-    ctx: "ProjectContext",
-    project_path: str = "",
+    ctx: "UserContext",
+    user_id: str = "",
 ) -> DebateResult:
     """Run a structured advocate/challenger/judge debate.
 
@@ -190,7 +190,7 @@ async def run_debate(
         advocate_position: The position the advocate argues for.
         challenger_position: The position the challenger argues for.
         ctx: The active project context.
-        project_path: Project path for memory persistence.
+        user_id: Project path for memory persistence.
 
     Returns:
         A :class:`DebateResult` with synthesis, confidence, and all
@@ -198,7 +198,7 @@ async def run_debate(
     """
     try:
         return await _run_debate_inner(
-            topic, advocate_position, challenger_position, ctx, project_path
+            topic, advocate_position, challenger_position, ctx, user_id
         )
     except Exception as exc:
         logger.error("Unexpected error during debate on '%s': %s", topic, exc)
@@ -223,8 +223,8 @@ async def _run_debate_inner(
     topic: str,
     advocate_position: str,
     challenger_position: str,
-    ctx: "ProjectContext",
-    project_path: str,
+    ctx: "UserContext",
+    user_id: str,
 ) -> DebateResult:
     """Internal implementation of the debate loop.
 
@@ -446,7 +446,7 @@ async def _run_debate_inner(
                 "winning_perspective": winning_perspective,
                 "all_evidence_ids": all_evidence_ids,
             },
-            project_path=project_path,
+            user_id=user_id,
         )
         # Extract consensus memory ID from the remember() result
         if isinstance(remember_result, dict):

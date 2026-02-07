@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 from sqlalchemy import func, select
 
 if TYPE_CHECKING:
-    from ..context_manager import ProjectContext
+    from ..context_manager import UserContext
     from .scheduler import IdleDreamScheduler
 
 try:
@@ -57,14 +57,14 @@ class DreamStrategy(ABC):
     async def execute(
         self,
         session: DreamSession,
-        ctx: "ProjectContext",
+        ctx: "UserContext",
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         """Execute the strategy, populating session.results.
 
         Args:
             session: The DreamSession to populate with results.
-            ctx: ProjectContext with db_manager and memory_manager.
+            ctx: UserContext with db_manager and memory_manager.
             scheduler: IdleDreamScheduler for cooperative yield checks.
 
         Returns:
@@ -100,7 +100,7 @@ class FailedDecisionReview(DreamStrategy):
     async def execute(
         self,
         session: DreamSession,
-        ctx: "ProjectContext",
+        ctx: "UserContext",
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         """Execute the FailedDecisionReview strategy.
@@ -140,7 +140,7 @@ class FailedDecisionReview(DreamStrategy):
         return session
 
     async def _get_failed_decisions(
-        self, ctx: "ProjectContext"
+        self, ctx: "UserContext"
     ) -> List[Any]:
         """Query worked=False decisions from the database.
 
@@ -231,7 +231,7 @@ class FailedDecisionReview(DreamStrategy):
         return reviewed_ids
 
     async def _re_evaluate_decision(
-        self, decision: Any, ctx: "ProjectContext"
+        self, decision: Any, ctx: "UserContext"
     ) -> DreamResult:
         """Re-evaluate a single failed decision against current evidence.
 
@@ -251,7 +251,7 @@ class FailedDecisionReview(DreamStrategy):
 
             # Gather current evidence from memory
             evidence = await ctx.memory_manager.recall(
-                query, limit=5, project_path=ctx.project_path
+                query, limit=5, user_id=ctx.user_id
             )
 
             # Extract evidence from flat memories list (new format)
@@ -347,7 +347,7 @@ class ConnectionDiscovery(DreamStrategy):
     async def execute(
         self,
         session: DreamSession,
-        ctx: "ProjectContext",
+        ctx: "UserContext",
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         session.strategies_run.append(self.name)
@@ -394,7 +394,7 @@ class ConnectionDiscovery(DreamStrategy):
         return session
 
     async def _find_unlinked_pairs(
-        self, ctx: "ProjectContext"
+        self, ctx: "UserContext"
     ) -> List[Tuple[int, int, Set[str]]]:
         """Find memory pairs sharing entities but lacking relationship edges.
 
@@ -495,7 +495,7 @@ class CommunityRefresh(DreamStrategy):
     async def execute(
         self,
         session: DreamSession,
-        ctx: "ProjectContext",
+        ctx: "UserContext",
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         session.strategies_run.append(self.name)
@@ -536,11 +536,11 @@ class CommunityRefresh(DreamStrategy):
             cm = CommunityManager(ctx.db_manager)
             kg = await ctx.memory_manager.get_knowledge_graph()
             communities = await cm.detect_communities_from_graph(
-                project_path=ctx.project_path,
+                user_id=ctx.user_id,
                 knowledge_graph=kg,
             )
             await cm.save_communities(
-                project_path=ctx.project_path,
+                user_id=ctx.user_id,
                 communities=communities,
             )
             session.insights_generated += 1
@@ -553,7 +553,7 @@ class CommunityRefresh(DreamStrategy):
 
         return session
 
-    async def _check_staleness(self, ctx: "ProjectContext") -> bool:
+    async def _check_staleness(self, ctx: "UserContext") -> bool:
         """Return True if communities are stale (enough new memories since last build)."""
         async with ctx.db_manager.get_session() as db_session:
             # Get the most recent community creation timestamp
@@ -615,7 +615,7 @@ class PendingOutcomeResolver(DreamStrategy):
     async def execute(
         self,
         session: DreamSession,
-        ctx: "ProjectContext",
+        ctx: "UserContext",
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         """Execute the PendingOutcomeResolver strategy."""
@@ -663,7 +663,7 @@ class PendingOutcomeResolver(DreamStrategy):
                             memory_id=decision.id,
                             outcome=f"[DREAM AUTO-RESOLVED] {result.insight}",
                             worked=worked,
-                            project_path=ctx.project_path,
+                            user_id=ctx.user_id,
                         )
                         session.outcomes_resolved += 1
                     except Exception as e:
@@ -683,7 +683,7 @@ class PendingOutcomeResolver(DreamStrategy):
         return session
 
     async def _get_pending_decisions(
-        self, ctx: "ProjectContext"
+        self, ctx: "UserContext"
     ) -> List[Any]:
         """Query pending goals (outcome IS NULL, worked IS NULL).
 
@@ -779,7 +779,7 @@ class PendingOutcomeResolver(DreamStrategy):
         return reviewed_ids
 
     async def _evaluate_decision(
-        self, decision: Any, ctx: "ProjectContext"
+        self, decision: Any, ctx: "UserContext"
     ) -> DreamResult:
         """Evaluate a pending decision using evidence from memory.
 
@@ -793,7 +793,7 @@ class PendingOutcomeResolver(DreamStrategy):
             query = decision.content[:200]
 
             evidence = await ctx.memory_manager.recall(
-                query, limit=10, project_path=ctx.project_path
+                query, limit=10, user_id=ctx.user_id
             )
 
             # Gather evidence from flat memories list (new format)

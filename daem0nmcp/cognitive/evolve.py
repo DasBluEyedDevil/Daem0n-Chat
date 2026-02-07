@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from sqlalchemy import select
 
 if TYPE_CHECKING:
-    from ..context_manager import ProjectContext
+    from ..context_manager import UserContext
 
 try:
     from ..models import Rule
@@ -42,7 +42,7 @@ _MIN_TERM_LENGTH = 3
 
 async def run_evolution(
     rule_id: Optional[int],
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> List[StalenessReport]:
     """Examine one or all rules for signs of entropy and decay.
 
@@ -53,7 +53,7 @@ async def run_evolution(
 
     Args:
         rule_id: Specific rule ID to analyse, or ``None`` for batch mode.
-        ctx: The active ``ProjectContext`` providing database and
+        ctx: The active ``UserContext`` providing database and
             memory manager access.
 
     Returns:
@@ -120,7 +120,7 @@ def _extract_terms(trigger: str) -> List[str]:
 
 async def _code_drift_analysis(
     terms: List[str],
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> tuple:
     """Compute code drift score by cross-referencing terms against the
     code index.
@@ -153,7 +153,7 @@ async def _code_drift_analysis(
 
         for term in terms:
             results = await indexer.search_entities(
-                term, project_path=ctx.project_path, limit=3
+                term, user_id=ctx.user_id, limit=3
             )
             if results:
                 referenced_entities.extend(results)
@@ -174,7 +174,7 @@ async def _code_drift_analysis(
 
 async def _outcome_correlation_analysis(
     trigger: str,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> tuple:
     """Query outcome history for decisions matching the rule trigger.
 
@@ -189,7 +189,7 @@ async def _outcome_correlation_analysis(
     try:
         recall_result = await ctx.memory_manager.recall(
             topic=trigger,
-            project_path=ctx.project_path,
+            user_id=ctx.user_id,
             limit=20,
         )
 
@@ -230,7 +230,7 @@ async def _outcome_correlation_analysis(
 
 async def _analyze_rule(
     rule: Rule,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> StalenessReport:
     """Analyse a single rule for staleness across three dimensions.
 
@@ -281,7 +281,7 @@ async def _analyze_rule(
 
 async def _analyze_rule_inner(
     rule: Rule,
-    ctx: "ProjectContext",
+    ctx: "UserContext",
 ) -> StalenessReport:
     """Core per-rule analysis logic, separated for clean error handling."""
 

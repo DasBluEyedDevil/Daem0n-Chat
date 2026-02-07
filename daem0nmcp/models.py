@@ -346,14 +346,14 @@ class SessionState(Base):
     """
     Tracks session state for enforcement.
 
-    Sessions are identified by project + time bucket.
+    Sessions are identified by user + time bucket.
     Tracks what context checks were made and what decisions are pending outcomes.
     """
     __tablename__ = "session_state"
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, nullable=False, unique=True, index=True)
-    project_path = Column(String, nullable=False)
+    user_id = Column(String, nullable=False)
     briefed = Column(Boolean, default=False)
     context_checks = Column(JSON, default=list)  # List of files/topics checked
     pending_decisions = Column(JSON, default=list)  # List of memory IDs
@@ -388,14 +388,14 @@ class ActiveContextItem(Base):
     - Active warnings that should never be forgotten
     - Current focus areas
 
-    Max items per project: 10 (prevents context bloat)
+    Max items per user: 10 (prevents context bloat)
     """
     __tablename__ = "active_context"
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Which project this belongs to
-    project_path = Column(String, nullable=False, index=True)
+    # Which user this belongs to
+    user_id = Column(String, nullable=False, index=True)
 
     # The memory to keep in active context
     memory_id = Column(Integer, ForeignKey("memories.id", ondelete="CASCADE"), nullable=False)
@@ -436,8 +436,8 @@ class MemoryCommunity(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Which project this belongs to
-    project_path = Column(String, nullable=False, index=True)
+    # Which user this belongs to
+    user_id = Column(String, nullable=False, index=True)
 
     # Human-readable name (auto-generated from dominant tags)
     name = Column(String, nullable=False)
@@ -488,7 +488,7 @@ class ExtractedEntity(Base):
     __tablename__ = "extracted_entities"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_path = Column(String, nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
     entity_type = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
     qualified_name = Column(String, nullable=True, index=True)

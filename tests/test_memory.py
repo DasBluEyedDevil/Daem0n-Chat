@@ -599,10 +599,10 @@ class TestPathNormalization:
         from daem0nmcp.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
-        project_path = str(tmp_path / "project")
+        user_id = str(tmp_path / "project")
         file_path = "src/main.py"
 
-        absolute, relative = _normalize_file_path(file_path, project_path)
+        absolute, relative = _normalize_file_path(file_path, user_id)
 
         # Should create absolute path
         assert Path(absolute).is_absolute()
@@ -618,14 +618,14 @@ class TestPathNormalization:
         from daem0nmcp.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
-        project_path = tmp_path / "project"
-        project_path.mkdir(parents=True, exist_ok=True)
-        (project_path / "src").mkdir(parents=True, exist_ok=True)
+        user_id = tmp_path / "project"
+        user_id.mkdir(parents=True, exist_ok=True)
+        (user_id / "src").mkdir(parents=True, exist_ok=True)
 
-        file_path = project_path / "src" / "main.py"
+        file_path = user_id / "src" / "main.py"
         file_path.touch()
 
-        absolute, relative = _normalize_file_path(str(file_path), str(project_path))
+        absolute, relative = _normalize_file_path(str(file_path), str(user_id))
 
         # Should keep absolute path
         assert Path(absolute).is_absolute()
@@ -639,15 +639,15 @@ class TestPathNormalization:
         from daem0nmcp.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
-        project_path = tmp_path / "project"
-        project_path.mkdir(parents=True, exist_ok=True)
+        user_id = tmp_path / "project"
+        user_id.mkdir(parents=True, exist_ok=True)
 
         other_path = tmp_path / "other"
         other_path.mkdir(parents=True, exist_ok=True)
         file_path = other_path / "file.py"
         file_path.touch()
 
-        absolute, relative = _normalize_file_path(str(file_path), str(project_path))
+        absolute, relative = _normalize_file_path(str(file_path), str(user_id))
 
         # Should keep absolute path
         assert Path(absolute).is_absolute()
@@ -661,8 +661,8 @@ class TestPathNormalization:
         """Test handling of empty path."""
         from daem0nmcp.memory import _normalize_file_path
 
-        project_path = str(tmp_path / "project")
-        absolute, relative = _normalize_file_path("", project_path)
+        user_id = str(tmp_path / "project")
+        absolute, relative = _normalize_file_path("", user_id)
 
         assert absolute is None
         assert relative is None
@@ -671,8 +671,8 @@ class TestPathNormalization:
         """Test handling of None path."""
         from daem0nmcp.memory import _normalize_file_path
 
-        project_path = str(tmp_path / "project")
-        absolute, relative = _normalize_file_path(None, project_path)
+        user_id = str(tmp_path / "project")
+        absolute, relative = _normalize_file_path(None, user_id)
 
         assert absolute is None
         assert relative is None
@@ -680,14 +680,14 @@ class TestPathNormalization:
     @pytest.mark.asyncio
     async def test_remember_with_file_path_normalization(self, memory_manager, temp_storage):
         """Test that remember() stores both absolute and relative paths."""
-        project_path = temp_storage
+        user_id = temp_storage
         file_path = "src/test.py"
 
         result = await memory_manager.remember(
             categories="fact",
             content="Test fact",
             file_path=file_path,
-            project_path=project_path
+            user_id=user_id
         )
 
         # Check that the memory was created
@@ -714,15 +714,15 @@ class TestPathNormalization:
             assert "test.py" in memory.file_path_relative.lower()
 
     @pytest.mark.asyncio
-    async def test_remember_without_project_path(self, memory_manager):
-        """Test that remember() works without project_path."""
+    async def test_remember_without_user_id(self, memory_manager):
+        """Test that remember() works without user_id."""
         file_path = r"C:\Users\test\file.py"
 
         result = await memory_manager.remember(
             categories="fact",
             content="Test fact",
             file_path=file_path
-            # No project_path provided
+            # No user_id provided
         )
 
         # Should still work, just stores the original path
@@ -825,7 +825,7 @@ class TestCompactMemories:
                 content=f"Emotion {i}: Some feeling about topic {i}",
                 rationale=f"Discovered during session {i}",
                 tags=["session", "compaction-test"],
-                project_path="/test/project"
+                user_id="/test/project"
             )
             memories.append(mem)
         return memories
@@ -898,13 +898,13 @@ class TestCompactMemories:
             categories=["emotion"],
             content="Learning about authentication flows",
             tags=["auth"],
-            project_path="/test"
+            user_id="/test"
         )
         await memory_manager.remember(
             categories=["emotion"],
             content="Learning about database optimization",
             tags=["database"],
-            project_path="/test"
+            user_id="/test"
         )
 
         result = await memory_manager.compact_memories(
@@ -939,14 +939,14 @@ class TestCompactMemories:
         pending = await memory_manager.remember(
             categories=["goal"],
             content="User wants to learn Redis - awaiting outcome",
-            project_path="/test"
+            user_id="/test"
         )
 
         # Create a goal WITH outcome (resolved)
         resolved = await memory_manager.remember(
             categories=["goal"],
             content="User wanted to learn PostgreSQL - outcome recorded",
-            project_path="/test"
+            user_id="/test"
         )
         await memory_manager.record_outcome(
             memory_id=resolved["id"],
@@ -958,7 +958,7 @@ class TestCompactMemories:
         emotion_mem = await memory_manager.remember(
             categories=["emotion"],
             content="User felt excited about connection pooling",
-            project_path="/test"
+            user_id="/test"
         )
 
         result = await memory_manager.compact_memories(
@@ -1127,7 +1127,7 @@ class TestRememberBatch:
             {"category": "pattern", "content": "Follow this pattern", "file_path": "src/utils.py"}
         ]
 
-        result = await memory_manager.remember_batch(memories, project_path=temp_storage)
+        result = await memory_manager.remember_batch(memories, user_id=temp_storage)
 
         assert result["created_count"] == 2
 

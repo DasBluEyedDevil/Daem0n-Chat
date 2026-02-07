@@ -32,7 +32,7 @@ class DreamSession:
     """Tracks a complete dream session with provenance metadata."""
 
     session_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
-    project_path: str = ""
+    user_id: str = ""
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
     decisions_reviewed: int = 0
@@ -90,7 +90,7 @@ async def persist_dream_result(
                 "evidence_ids": result.evidence_ids,
                 "dream_timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            project_path=session.project_path,
+            user_id=session.user_id,
         )
     except Exception as e:
         logger.warning(
@@ -152,7 +152,7 @@ async def persist_session_summary(
                 ),
                 "dream_timestamp": datetime.now(timezone.utc).isoformat(),
             },
-            project_path=session.project_path,
+            user_id=session.user_id,
         )
     except Exception as e:
         logger.warning(
