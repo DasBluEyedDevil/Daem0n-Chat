@@ -330,7 +330,8 @@ class MemoryManager:
         query: str,
         top_k: int = 10,
         tfidf_threshold: float = 0.1,
-        vector_threshold: float = 0.3
+        vector_threshold: float = 0.3,
+        user_name: Optional[str] = None,
     ) -> List[Tuple[int, float]]:
         """
         Hybrid search combining TF-IDF and Qdrant vector similarity.
@@ -363,7 +364,8 @@ class MemoryManager:
                     try:
                         qdrant_results = self._qdrant.search(
                             query_vector=query_vector,
-                            limit=top_k * 2
+                            limit=top_k * 2,
+                            user_name=user_name,
                         )
                     except (ResponseHandlingException, UnexpectedResponse, RuntimeError) as e:
                         # Handle Qdrant API errors gracefully
@@ -410,6 +412,7 @@ class MemoryManager:
         happened_at: Optional[datetime] = None,
         source_client: Optional[str] = None,
         source_model: Optional[str] = None,
+        user_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Store a new memory with conflict detection.
@@ -472,6 +475,8 @@ class MemoryManager:
         if file_path and user_id:
             file_path_abs, file_path_rel = _normalize_file_path(file_path, user_id)
 
+        effective_user_name = user_name or "default"
+
         memory = Memory(
             categories=categories,
             category=categories[0] if categories else None,  # deprecated: for migration compat
@@ -486,6 +491,7 @@ class MemoryManager:
             vector_embedding=vector_embedding,
             source_client=source_client,
             source_model=source_model,
+            user_name=effective_user_name,
         )
 
         async with self.db.get_session() as session:
@@ -535,7 +541,8 @@ class MemoryManager:
                             "tags": tags or [],
                             "file_path": file_path_abs,
                             "worked": None,  # Will be updated via record_outcome
-                            "is_permanent": is_permanent
+                            "is_permanent": is_permanent,
+                            "user_name": effective_user_name,
                         }
                     )
 
@@ -553,6 +560,7 @@ class MemoryManager:
                 "valid_from": version.valid_from.isoformat() if version.valid_from else None,
                 "source_client": source_client,
                 "source_model": source_model,
+                "user_name": effective_user_name,
             }
 
             # Add conflict warnings if any
@@ -594,7 +602,8 @@ class MemoryManager:
     async def remember_batch(
         self,
         memories: List[Dict[str, Any]],
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        user_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Store multiple memories in a single transaction.
@@ -697,6 +706,8 @@ class MemoryManager:
                     if file_path and user_id:
                         file_path_abs, file_path_rel = _normalize_file_path(file_path, user_id)
 
+                    batch_user_name = user_name or "default"
+
                     memory = Memory(
                         categories=categories,
                         category=categories[0] if categories else None,  # deprecated
@@ -708,7 +719,8 @@ class MemoryManager:
                         file_path=file_path_abs,
                         file_path_relative=file_path_rel,
                         is_permanent=is_permanent,
-                        vector_embedding=vector_embedding
+                        vector_embedding=vector_embedding,
+                        user_name=batch_user_name,
                     )
 
                     session.add(memory)
@@ -732,7 +744,8 @@ class MemoryManager:
                                     "tags": tags,
                                     "file_path": file_path_abs,
                                     "worked": None,
-                                    "is_permanent": is_permanent
+                                    "is_permanent": is_permanent,
+                                    "user_name": batch_user_name,
                                 }
                             )
 
@@ -1016,6 +1029,7 @@ class MemoryManager:
         include_linked: bool = False,
         condensed: bool = False,  # Endless Mode compression
         as_of_time: Optional[datetime] = None,
+        user_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Recall memories relevant to a topic using semantic similarity.
@@ -1060,6 +1074,7 @@ class MemoryManager:
         """
         # Check cache first
         cache = get_recall_cache()
+        effective_user_name = user_name or "default"
         cache_key = make_cache_key(
             topic, categories, tags, file_path, offset, limit,
             since.isoformat() if since else None,
@@ -1068,6 +1083,7 @@ class MemoryManager:
             include_linked,
             condensed,  # Include condensed in cache key for separate caching
             as_of_time.isoformat() if as_of_time else None,
+            effective_user_name,
         )
         found, cached_result = cache.get(cache_key)
         if found and cached_result is not None:
@@ -1086,7 +1102,7 @@ class MemoryManager:
             route_result = await router.route_search(topic, top_k=limit * 4)
             search_results = route_result["results"]
         else:
-            search_results = self._hybrid_search(topic, top_k=limit * 4, tfidf_threshold=0.05)
+            search_results = self._hybrid_search(topic, top_k=limit * 4, tfidf_threshold=0.05, user_name=effective_user_name)
 
         if not search_results and not include_linked:
             return {"memories": [], "message": "No relevant memories found", "topic": topic}
@@ -1099,7 +1115,8 @@ class MemoryManager:
             # Build query with date filters at database level for performance
             query = select(Memory).where(
                 Memory.id.in_(memory_ids),
-                _not_archived_condition()
+                _not_archived_condition(),
+                Memory.user_name == effective_user_name,
             )
 
             def _to_utc_naive(dt_value: datetime) -> datetime:
@@ -1500,6 +1517,7 @@ class MemoryManager:
         memory_file_path = None
         memory_is_permanent = None
         memory_vector_embedding = None
+        memory_user_name = None
 
         async with self.db.get_session() as session:
             result = await session.execute(
@@ -1512,6 +1530,7 @@ class MemoryManager:
 
             # Cache values needed after session closes
             memory_content = memory.content
+            memory_user_name = getattr(memory, 'user_name', 'default') or 'default'
             memory_categories = getattr(memory, 'categories', None) or []
             if not memory_categories and hasattr(memory, 'category') and memory.category:
                 memory_categories = [memory.category]
@@ -1557,7 +1576,8 @@ class MemoryManager:
                             "tags": memory_tags or [],
                             "file_path": memory_file_path,
                             "worked": worked,
-                            "is_permanent": memory_is_permanent
+                            "is_permanent": memory_is_permanent,
+                            "user_name": memory_user_name,
                         }
                     )
 

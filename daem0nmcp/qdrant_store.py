@@ -111,7 +111,8 @@ class QdrantVectorStore:
         limit: int = 20,
         category_filter: Optional[list[str]] = None,
         tags_filter: Optional[list[str]] = None,
-        file_path: Optional[str] = None
+        file_path: Optional[str] = None,
+        user_name: Optional[str] = None,
     ) -> list[tuple[int, float]]:
         """
         Search for similar memories with optional metadata filtering.
@@ -140,6 +141,10 @@ class QdrantVectorStore:
         if file_path:
             filters.append(
                 FieldCondition(key="file_path", match=MatchValue(value=file_path))
+            )
+        if user_name:
+            filters.append(
+                FieldCondition(key="user_name", match=MatchValue(value=user_name))
             )
 
         # Use query_points (modern API) instead of deprecated search
