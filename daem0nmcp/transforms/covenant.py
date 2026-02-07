@@ -41,84 +41,27 @@ COUNSEL_TTL_SECONDS = 300
 # ============================================================================
 
 # Tools exempt from all covenant enforcement (entry points and diagnostics)
+# daem0n_briefing and daem0n_status can be called without prior briefing
+# daem0n_recall is read-only and always allowed
 COVENANT_EXEMPT_TOOLS: Set[str] = {
-    "get_briefing",      # Entry point - starts communion
-    "health",            # Diagnostic - always available
-    "context_check",     # Part of the covenant flow
-    "recall",            # Read-only query
-    "recall_for_file",   # Read-only query
-    "search_memories",   # Read-only query
-    "find_related",      # Read-only query
-    "check_rules",       # Read-only query
-    "list_rules",        # Read-only query
-    "find_code",         # Read-only query
-    "analyze_impact",    # Read-only analysis
-    "export_data",       # Read-only export
-    "scan_todos",        # Read-only scan (unless auto_remember=True)
-    "propose_refactor",  # Read-only analysis
-    "get_graph",         # Read-only query
-    "trace_chain",       # Read-only query
-    "recall_hierarchical",  # Read-only query
-    "list_communities",     # Read-only query
-    "get_community_details",  # Read-only query
-    "recall_by_entity",     # Read-only query
-    "list_entities",        # Read-only query
-    "get_memory_versions",  # Read-only query
-    "get_memory_at_time",   # Read-only query
-    "list_context_triggers",  # Read-only query
-    "check_context_triggers",  # Read-only query
-    "get_active_context",   # Read-only query
-    "list_linked_projects",  # Read-only query
-    # Cognitive tools (Phase 17) -- analytical, read-only instruments
-    "simulate_decision",
-    "evolve_rule",
-    "debate_internal",
+    "daem0n_briefing",   # Entry point - starts communion
+    "daem0n_status",     # Diagnostic - always available
+    "daem0n_recall",     # Read-only query
+    "daem0n_profile",    # Read-only (get action)
 }
 
-# Tools that REQUIRE communion (must call get_briefing first)
-# These are all mutating tools - they change state
+# Tools that REQUIRE communion (must call daem0n_briefing first)
+# These are mutating tools - they change state
 COMMUNION_REQUIRED_TOOLS: Set[str] = {
-    "remember",
-    "remember_batch",
-    "add_rule",
-    "update_rule",
-    "record_outcome",
-    "link_memories",
-    "unlink_memories",
-    "pin_memory",
-    "archive_memory",
-    "prune_memories",
-    "cleanup_memories",
-    "compact_memories",
-    "import_data",
-    "rebuild_index",
-    "index_project",
-    "ingest_doc",
-    "set_active_context",
-    "remove_from_active_context",
-    "clear_active_context",
-    "link_projects",
-    "unlink_projects",
-    "consolidate_linked_databases",
-    "rebuild_communities",
-    "backfill_entities",
-    "add_context_trigger",
-    "remove_context_trigger",
+    "daem0n_remember",   # Stores new memories
+    "daem0n_forget",     # Deletes memories
+    "daem0n_relate",     # Modifies relationships
+    "daem0n_reflect",    # Records outcomes
 }
 
-# Tools that REQUIRE counsel (must call context_check before mutating)
-# These are the most important mutations that could cause conflicts
-COUNSEL_REQUIRED_TOOLS: Set[str] = {
-    "remember",
-    "remember_batch",
-    "add_rule",
-    "update_rule",
-    "prune_memories",
-    "cleanup_memories",
-    "compact_memories",
-    "import_data",
-    "ingest_doc",
-}
+# Tools that REQUIRE counsel (no longer used in new tool set)
+# The new daem0n_* tools don't have counsel requirement
+COUNSEL_REQUIRED_TOOLS: Set[str] = set()
 
 
 # ============================================================================

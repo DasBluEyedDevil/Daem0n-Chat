@@ -88,19 +88,13 @@ async def ensure_covenant_compliance(user_id: str):
     """
     Helper to ensure covenant compliance for tests.
 
-    Calls get_briefing() and context_check() to satisfy the Sacred Covenant
-    requirements for tools that need communion and/or counsel.
+    Calls daem0n_briefing() to satisfy the Sacred Covenant
+    requirements for tools that need communion.
     """
     from daem0nmcp import server
 
-    # Ensure communion (get_briefing)
-    await server.get_briefing(user_id=user_id)
-
-    # Ensure counsel (context_check)
-    await server.context_check(
-        description="Test operation",
-        user_id=user_id,
-    )
+    # Ensure communion (daem0n_briefing)
+    await server.daem0n_briefing(user_id=user_id)
 
 
 @pytest.fixture
