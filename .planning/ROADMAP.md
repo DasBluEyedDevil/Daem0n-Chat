@@ -13,7 +13,7 @@ Daem0n-Chat transforms the existing Daem0n-MCP coding memory system into a conve
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Codebase Cleanup & Categories** - Strip coding modules, consolidate MCP tools, establish conversational memory categories ✓ COMPLETE
-- [ ] **Phase 2: User Profiles & Multi-User** - Build user profile system with isolated per-user memory storage
+- [x] **Phase 2: User Profiles & Multi-User** - Build user profile system with isolated per-user memory storage ✓ COMPLETE
 - [ ] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability
 - [ ] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay
 - [ ] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context
@@ -52,9 +52,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 02-01-PLAN.md -- Schema foundation: add user_name column to Memory and related tables, migration 18, extend UserContext with current_user, add user_name filtering to remember/recall/Qdrant
-- [ ] 02-02-PLAN.md -- Profile & briefing: expand daem0n_profile with user switching/onboarding, multi-user briefing with identity verification, pipe user_name through all 8 tools
-- [ ] 02-03-PLAN.md -- Isolation sweep: add user_name filtering to dreaming/active_context/communities/entities/cognitive modules, comprehensive cross-user isolation tests
+- [x] 02-01-PLAN.md -- Schema foundation: add user_name column to Memory and related tables, migration 18, extend UserContext with current_user, add user_name filtering to remember/recall/Qdrant
+- [x] 02-02-PLAN.md -- Profile & briefing: expand daem0n_profile with user switching/onboarding, multi-user briefing with identity verification, pipe user_name through all 8 tools
+- [x] 02-03-PLAN.md -- Isolation sweep: add user_name filtering to dreaming/active_context/communities/entities/cognitive modules, comprehensive cross-user isolation tests
 
 ### Phase 3: Explicit Memory Capture & Control
 **Goal**: Users can directly tell Claude to remember or forget specific information, and can audit everything Claude knows about them
@@ -169,7 +169,7 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. Codebase Cleanup & Categories | 3/3 | ✓ Complete | 2026-02-07 |
-| 2. User Profiles & Multi-User | 0/3 | Not started | - |
+| 2. User Profiles & Multi-User | 3/3 | ✓ Complete | 2026-02-07 |
 | 3. Explicit Memory Capture & Control | 0/2 | Not started | - |
 | 4. Auto-Detection & Memory Decay | 0/2 | Not started | - |
 | 5. Session Experience | 0/2 | Not started | - |
