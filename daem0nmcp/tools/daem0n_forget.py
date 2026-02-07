@@ -43,22 +43,28 @@ async def daem0n_forget(
     effective_user_id = user_id or _default_user_id
     ctx = await get_user_context(effective_user_id)
 
-    # Check if memory exists
+    # Check if memory exists and belongs to the current user
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
-            select(Memory).where(Memory.id == memory_id)
+            select(Memory).where(
+                Memory.id == memory_id,
+                Memory.user_name == ctx.current_user,
+            )
         )
         memory = result.scalar_one_or_none()
 
         if not memory:
             return {
-                "error": f"Memory {memory_id} not found",
+                "error": f"Memory {memory_id} not found for user '{ctx.current_user}'",
                 "deleted": False,
             }
 
-        # Delete from database
+        # Delete from database (scoped to current user)
         await session.execute(
-            delete(Memory).where(Memory.id == memory_id)
+            delete(Memory).where(
+                Memory.id == memory_id,
+                Memory.user_name == ctx.current_user,
+            )
         )
         await session.commit()
 

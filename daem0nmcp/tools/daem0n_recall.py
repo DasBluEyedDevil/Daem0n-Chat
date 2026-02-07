@@ -46,6 +46,7 @@ async def daem0n_recall(
         categories=categories,
         limit=limit,
         user_id=ctx.user_id,
+        user_name=ctx.current_user,
     )
 
     return result

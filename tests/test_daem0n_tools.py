@@ -14,6 +14,7 @@ class TestDaem0nRemember:
         with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager.remember = AsyncMock(return_value={
                 "id": 1,
                 "categories": ["fact"],
@@ -39,6 +40,7 @@ class TestDaem0nRemember:
         with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager.remember = AsyncMock(return_value={
                 "id": 2,
                 "categories": ["fact", "preference"],
@@ -71,6 +73,31 @@ class TestDaem0nRemember:
             assert "error" in result
             assert "invalid_category" in str(result["error"])
 
+    @pytest.mark.asyncio
+    async def test_remember_passes_user_name(self):
+        """remember pipes ctx.current_user as user_name to memory manager."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Alice"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 3,
+                "categories": ["fact"],
+                "content": "Test",
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            await daem0n_remember(
+                content="Test",
+                categories="fact",
+                user_id="/test/user",
+            )
+
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert call_kwargs["user_name"] == "Alice"
+
 
 class TestDaem0nRecall:
     """Tests for daem0n_recall tool."""
@@ -81,6 +108,7 @@ class TestDaem0nRecall:
         with patch("daem0nmcp.tools.daem0n_recall.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager.recall = AsyncMock(return_value={
                 "memories": [
                     {"id": 1, "content": "User lives in Portland", "categories": ["fact"]},
@@ -105,6 +133,7 @@ class TestDaem0nRecall:
         with patch("daem0nmcp.tools.daem0n_recall.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager.recall = AsyncMock(return_value={
                 "memories": [
                     {"id": 1, "content": "Likes hiking", "categories": ["preference"]},
@@ -124,6 +153,23 @@ class TestDaem0nRecall:
             call_kwargs = ctx.memory_manager.recall.call_args.kwargs
             assert call_kwargs["categories"] == ["preference"]
 
+    @pytest.mark.asyncio
+    async def test_recall_passes_user_name(self):
+        """recall pipes ctx.current_user as user_name to memory manager."""
+        with patch("daem0nmcp.tools.daem0n_recall.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Bob"
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_recall import daem0n_recall
+
+            await daem0n_recall(query="test", user_id="/test/user")
+
+            call_kwargs = ctx.memory_manager.recall.call_args.kwargs
+            assert call_kwargs["user_name"] == "Bob"
+
 
 class TestDaem0nForget:
     """Tests for daem0n_forget tool."""
@@ -136,6 +182,7 @@ class TestDaem0nForget:
 
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager._qdrant = None
             ctx.memory_manager._index = None
 
@@ -144,6 +191,7 @@ class TestDaem0nForget:
             mock_result = MagicMock()
             mock_memory = MagicMock(spec=Memory)
             mock_memory.id = 1
+            mock_memory.user_name = "default"
             mock_result.scalar_one_or_none.return_value = mock_memory
             mock_session.execute = AsyncMock(return_value=mock_result)
             mock_session.commit = AsyncMock()
@@ -163,19 +211,49 @@ class TestDaem0nForget:
             assert result["deleted"] is True
             assert result["memory_id"] == 1
 
+    @pytest.mark.asyncio
+    async def test_forget_scoped_to_user(self):
+        """Forget should filter by user_name -- missing memory returns error."""
+        with patch("daem0nmcp.tools.daem0n_forget.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Bob"
+            ctx.memory_manager._qdrant = None
+            ctx.memory_manager._index = None
+
+            # Simulate memory not found for this user
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = None
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(memory_id=999, user_id="/test/user")
+
+            assert result["deleted"] is False
+            assert "Bob" in result["error"]
+
 
 class TestDaem0nBriefing:
     """Tests for daem0n_briefing tool."""
 
     @pytest.mark.asyncio
-    async def test_first_session_new_user(self):
-        """First session returns warm introduction."""
+    async def test_first_session_new_device(self):
+        """First session on new device returns warm introduction."""
         with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
             ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
 
-            # Mock session for memory count (returns 0 = new user)
+            # Mock session for memory count (returns 0 = new device)
             mock_session = MagicMock()
             mock_result = MagicMock()
             mock_result.scalar.return_value = 0
@@ -191,8 +269,83 @@ class TestDaem0nBriefing:
             result = await daem0n_briefing(user_id="/test/user")
 
             assert result["is_first_session"] is True
+            assert result["is_new_device"] is True
             assert "first_session_guidance" in result
-            assert "new user" in result["first_session_guidance"].lower()
+            assert result["current_user"] == "default"
+
+    @pytest.mark.asyncio
+    async def test_briefing_returning_user_greets_by_name(self):
+        """After storing a name, briefing returns greeting_name and identity_hint."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Mock total memory count > 0
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                # First call: total memory count
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 5
+                    return result
+
+                # Second call: distinct user_names
+                if call_count["n"] == 2:
+                    result.all.return_value = [("Susan",)]
+                    return result
+
+                # Third call: most recent user
+                if call_count["n"] == 3:
+                    row = MagicMock()
+                    row.user_name = "Susan"
+                    row.last_active = datetime.now(timezone.utc)
+                    result.first.return_value = row
+                    return result
+
+                # Remaining calls (for _build_user_briefing queries)
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            # Mock recall to return profile with name
+            async def mock_recall(**kwargs):
+                tags = kwargs.get("tags", [])
+                if "profile" in (tags or []):
+                    return {
+                        "memories": [
+                            {
+                                "id": 1,
+                                "content": "User's name is Susan",
+                                "categories": ["fact"],
+                                "tags": ["profile", "identity", "name"],
+                            }
+                        ],
+                    }
+                return {"memories": []}
+
+            ctx.memory_manager.recall = AsyncMock(side_effect=mock_recall)
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert result["current_user"] == "Susan"
+            assert result["greeting_name"] == "User's name is Susan"
+            assert "identity_hint" in result
+            assert "Susan" in result["identity_hint"]
 
     @pytest.mark.asyncio
     async def test_returning_user_briefing(self):
@@ -201,15 +354,30 @@ class TestDaem0nBriefing:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
             ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
 
-            # Mock session for memory count (returns > 0 = returning user)
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+
+                if call_count["n"] == 2:
+                    # distinct user_names: only default
+                    result.all.return_value = [("default",)]
+                    return result
+
+                # Remaining session queries return empty
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                return result
+
             mock_session = MagicMock()
-            mock_result = MagicMock()
-            mock_result.scalar.return_value = 10
-            mock_scalars = MagicMock()
-            mock_scalars.all.return_value = []
-            mock_result.scalars.return_value = mock_scalars
-            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             ctx.db_manager.get_session.return_value = mock_session
@@ -223,7 +391,8 @@ class TestDaem0nBriefing:
 
             result = await daem0n_briefing(user_id="/test/user")
 
-            assert result["is_first_session"] is False
+            # Default-only user gets first_session guidance
+            assert result["is_first_session"] is True
             assert "user_summary" in result
             assert "unresolved_threads" in result
             assert "recent_topics" in result
@@ -238,10 +407,11 @@ class TestDaem0nProfile:
         with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager.recall = AsyncMock(return_value={
                 "memories": [
-                    {"id": 1, "content": "Name is Alex", "categories": ["fact"]},
-                    {"id": 2, "content": "Likes coffee", "categories": ["preference"]},
+                    {"id": 1, "content": "Name is Alex", "categories": ["fact"], "tags": []},
+                    {"id": 2, "content": "Likes coffee", "categories": ["preference"], "tags": []},
                 ],
             })
             mock_ctx.return_value = ctx
@@ -256,6 +426,247 @@ class TestDaem0nProfile:
             assert result["type"] == "profile"
             assert "facts" in result
             assert "preferences" in result
+            assert result["user_name"] == "default"
+
+    @pytest.mark.asyncio
+    async def test_profile_get_empty(self):
+        """Profile get for default user returns empty facts."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(action="get", user_id="/test/user")
+
+            assert result["type"] == "profile"
+            assert result["facts"] == []
+            assert result["preferences"] == []
+            assert result["greeting_name"] is None
+            assert result["claude_name"] == "Claude"
+
+    @pytest.mark.asyncio
+    async def test_profile_switch_user_new(self):
+        """Switch to new user returns onboarding guidance."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Mock session: no memories for "Steve"
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 0
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="switch_user",
+                user_name="Steve",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "new_user"
+            assert result["user_name"] == "Steve"
+            assert "onboarding_guidance" in result
+            assert ctx.current_user == "Steve"
+            assert "Steve" in ctx.known_users
+
+    @pytest.mark.asyncio
+    async def test_profile_switch_user_returning(self):
+        """Switch to returning user loads their profile."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Mock session: 5 memories for "Susan"
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 5
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            # Mock recall for profile load
+            ctx.memory_manager.recall = AsyncMock(return_value={
+                "memories": [
+                    {
+                        "id": 1,
+                        "content": "User's name is Susan",
+                        "categories": ["fact"],
+                        "tags": ["profile", "identity", "name"],
+                    }
+                ],
+            })
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="switch_user",
+                user_name="Susan",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "user_switched"
+            assert result["user_name"] == "Susan"
+            assert result["greeting_name"] == "User's name is Susan"
+            assert "Welcome back" in result["greeting"]
+            assert ctx.current_user == "Susan"
+
+    @pytest.mark.asyncio
+    async def test_profile_set_name(self):
+        """Set name stores permanent fact with profile tag."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.known_users = ["default"]
+
+            # Mock remember
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 10,
+                "content": "User's name is Alex",
+                "categories": ["fact"],
+            })
+
+            # Mock session for update + migration
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="set_name",
+                name="Alex",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "name_set"
+            assert result["display_name"] == "Alex"
+            assert result["migrated_from_default"] is True
+
+            # Verify remember was called with profile tags
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert "profile" in call_kwargs["tags"]
+            assert "identity" in call_kwargs["tags"]
+            assert "name" in call_kwargs["tags"]
+
+            # Verify context was updated from default to real name
+            assert ctx.current_user == "Alex"
+
+    @pytest.mark.asyncio
+    async def test_profile_set_claude_name(self):
+        """Set Claude name stores permanent fact with claude_name tag."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Alex"
+
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 11,
+                "content": "User calls Claude 'Buddy'",
+                "categories": ["fact"],
+            })
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="set_claude_name",
+                name="Buddy",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "claude_name_set"
+            assert result["claude_name"] == "Buddy"
+
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert "claude_name" in call_kwargs["tags"]
+
+    @pytest.mark.asyncio
+    async def test_profile_list_users(self):
+        """List users returns known users with memory counts."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Alex"
+
+            mock_session = MagicMock()
+            mock_row1 = MagicMock()
+            mock_row1.user_name = "Alex"
+            mock_row1.memory_count = 10
+            mock_row1.last_active = datetime(2026, 2, 7, tzinfo=timezone.utc)
+            mock_row2 = MagicMock()
+            mock_row2.user_name = "Susan"
+            mock_row2.memory_count = 5
+            mock_row2.last_active = datetime(2026, 2, 6, tzinfo=timezone.utc)
+            mock_result = MagicMock()
+            mock_result.all.return_value = [mock_row1, mock_row2]
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="list_users",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "user_list"
+            assert result["current_user"] == "Alex"
+            assert result["total_users"] == 2
+            assert result["users"][0]["user_name"] == "Alex"
+
+    @pytest.mark.asyncio
+    async def test_profile_invalid_action(self):
+        """Invalid action returns error."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="invalid_action",
+                user_id="/test/user",
+            )
+
+            assert "error" in result
+            assert "valid_actions" in result
 
 
 class TestDaem0nStatus:
@@ -267,6 +678,7 @@ class TestDaem0nStatus:
         with patch("daem0nmcp.tools.daem0n_status.get_user_context") as mock_ctx:
             ctx = MagicMock()
             ctx.user_id = "/test/user"
+            ctx.current_user = "default"
             ctx.memory_manager._qdrant = None
 
             # Mock session for memory count
@@ -291,6 +703,7 @@ class TestDaem0nStatus:
             assert "total_memories" in result
             assert "storage" in result
             assert result["storage"]["database_healthy"] is True
+            assert result["current_user"] == "default"
 
 
 class TestDaem0nRelate:
@@ -385,3 +798,60 @@ class TestDaem0nReflect:
             )
 
             assert "error" in result
+
+
+class TestRememberScopedToUser:
+    """Tests for cross-user memory isolation."""
+
+    @pytest.mark.asyncio
+    async def test_remember_scoped_to_user(self):
+        """remember as user A, recall as user B returns nothing."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_remember_ctx, \
+             patch("daem0nmcp.tools.daem0n_recall.get_user_context") as mock_recall_ctx:
+
+            # User A context
+            ctx_a = MagicMock()
+            ctx_a.user_id = "/test/user"
+            ctx_a.current_user = "Alice"
+            ctx_a.memory_manager.remember = AsyncMock(return_value={
+                "id": 1,
+                "content": "Alice's secret",
+                "categories": ["fact"],
+                "user_name": "Alice",
+            })
+
+            # User B context
+            ctx_b = MagicMock()
+            ctx_b.user_id = "/test/user"
+            ctx_b.current_user = "Bob"
+            ctx_b.memory_manager.recall = AsyncMock(return_value={"memories": []})
+
+            mock_remember_ctx.return_value = ctx_a
+            mock_recall_ctx.return_value = ctx_b
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+            from daem0nmcp.tools.daem0n_recall import daem0n_recall
+
+            # Alice remembers something
+            await daem0n_remember(
+                content="Alice's secret",
+                categories="fact",
+                user_id="/test/user",
+            )
+
+            # Verify remember was called with Alice's user_name
+            remember_kwargs = ctx_a.memory_manager.remember.call_args.kwargs
+            assert remember_kwargs["user_name"] == "Alice"
+
+            # Bob tries to recall
+            result = await daem0n_recall(
+                query="Alice's secret",
+                user_id="/test/user",
+            )
+
+            # Verify recall was called with Bob's user_name
+            recall_kwargs = ctx_b.memory_manager.recall.call_args.kwargs
+            assert recall_kwargs["user_name"] == "Bob"
+
+            # Bob's recall returns nothing (different user)
+            assert result["memories"] == []

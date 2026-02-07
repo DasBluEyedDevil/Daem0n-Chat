@@ -42,17 +42,24 @@ async def daem0n_status(
     effective_user_id = user_id or _default_user_id
     ctx = await get_user_context(effective_user_id)
 
-    # Get total memory count
+    # Get total memory count (scoped to current user)
+    current = ctx.current_user
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
-            select(func.count(Memory.id))
+            select(func.count(Memory.id)).where(
+                Memory.user_name == current,
+            )
         )
         total_memories = result.scalar() or 0
 
     # Count by category (approximate - memories can have multiple categories)
     category_counts = {}
     async with ctx.db_manager.get_session() as session:
-        result = await session.execute(select(Memory.categories))
+        result = await session.execute(
+            select(Memory.categories).where(
+                Memory.user_name == current,
+            )
+        )
         all_categories = result.scalars().all()
 
         for cats in all_categories:
@@ -89,4 +96,5 @@ async def daem0n_status(
             "vector_count": qdrant_count,
         },
         "user_id": effective_user_id,
+        "current_user": current,
     }
