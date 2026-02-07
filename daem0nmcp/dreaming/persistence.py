@@ -47,6 +47,7 @@ async def persist_dream_result(
     memory_manager,
     result: DreamResult,
     session: DreamSession,
+    user_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Store a dream re-evaluation result as a learning memory.
 
@@ -54,6 +55,7 @@ async def persist_dream_result(
         memory_manager: MemoryManager instance for storing memories.
         result: The DreamResult to persist.
         session: The DreamSession this result belongs to.
+        user_name: Which user this dream result belongs to (multi-user isolation).
 
     Returns:
         The result from memory_manager.remember(), or {"error": str} on failure.
@@ -91,6 +93,7 @@ async def persist_dream_result(
                 "dream_timestamp": datetime.now(timezone.utc).isoformat(),
             },
             user_id=session.user_id,
+            user_name=user_name or "default",
         )
     except Exception as e:
         logger.warning(
@@ -104,6 +107,7 @@ async def persist_dream_result(
 async def persist_session_summary(
     memory_manager,
     session: DreamSession,
+    user_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Store a dream session summary as a learning memory.
 
@@ -112,6 +116,7 @@ async def persist_session_summary(
     Args:
         memory_manager: MemoryManager instance for storing memories.
         session: The completed DreamSession to summarize.
+        user_name: Which user this dream session belongs to (multi-user isolation).
 
     Returns:
         The result from memory_manager.remember(), None if no insights,
@@ -153,6 +158,7 @@ async def persist_session_summary(
                 "dream_timestamp": datetime.now(timezone.utc).isoformat(),
             },
             user_id=session.user_id,
+            user_name=user_name or "default",
         )
     except Exception as e:
         logger.warning(

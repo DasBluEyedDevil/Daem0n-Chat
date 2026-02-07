@@ -187,9 +187,11 @@ async def _outcome_correlation_analysis(
     unknown = 0
 
     try:
+        user_name = getattr(ctx, "current_user", "default") or "default"
         recall_result = await ctx.memory_manager.recall(
             topic=trigger,
             user_id=ctx.user_id,
+            user_name=user_name,
             limit=20,
         )
 

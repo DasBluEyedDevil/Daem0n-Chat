@@ -4,6 +4,11 @@ The scheduler watches for idle periods (no MCP tool calls for a configurable
 timeout), then triggers a dream callback. It uses time.monotonic() for
 reliable idle detection, debounces via timestamp comparison, and yields
 cooperatively via asyncio.Event when the user returns.
+
+Multi-user note: The scheduler itself is user-agnostic. The dream callback
+(set via set_dream_callback) determines which user context to dream for.
+All dream strategies read ctx.current_user (user_name) to scope their
+queries, ensuring dreaming never crosses user boundaries.
 """
 
 import asyncio

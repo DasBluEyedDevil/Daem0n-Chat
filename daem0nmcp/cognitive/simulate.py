@@ -171,16 +171,20 @@ async def _run_simulation_inner(
     # ------------------------------------------------------------------
     # 1. Look up the decision memory
     # ------------------------------------------------------------------
+    user_name_for_lookup = getattr(ctx, "current_user", "default") or "default"
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
-            select(Memory).where(Memory.id == decision_id)
+            select(Memory).where(
+                Memory.id == decision_id,
+                Memory.user_name == user_name_for_lookup,
+            )
         )
         decision = result.scalar_one_or_none()
 
     if not decision:
         raise ValueError(
             f"The daemon cannot scry a decision that was never inscribed "
-            f"(memory #{decision_id} not found)"
+            f"(memory #{decision_id} not found for user '{user_name_for_lookup}')"
         )
 
     decision_content = decision.content
@@ -213,10 +217,12 @@ async def _run_simulation_inner(
     # ------------------------------------------------------------------
     # 3. Reconstruct historical context (what was known THEN)
     # ------------------------------------------------------------------
+    user_name = getattr(ctx, "current_user", "default") or "default"
     historical_recall = await mm.recall(
         topic=query_topic,
         as_of_time=decision_time_dt,
         user_id=ctx.user_id,
+        user_name=user_name,
     )
     historical_memories = _extract_memories_from_recall(historical_recall)
     historical_context = _build_context_dict(
@@ -229,6 +235,7 @@ async def _run_simulation_inner(
     current_recall = await mm.recall(
         topic=query_topic,
         user_id=ctx.user_id,
+        user_name=user_name,
     )
     current_memories = _extract_memories_from_recall(current_recall)
     current_time_iso = datetime.now(timezone.utc).isoformat()

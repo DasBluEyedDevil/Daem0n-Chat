@@ -35,7 +35,8 @@ class EntityManager:
         memory_id: int,
         content: str,
         user_id: str,
-        rationale: Optional[str] = None
+        rationale: Optional[str] = None,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
         """
         Extract entities from a memory and create relationships.
@@ -45,6 +46,7 @@ class EntityManager:
             content: Memory content to extract from
             user_id: Project this belongs to
             rationale: Optional rationale to also extract from
+            user_name: Which user this memory belongs to (multi-user isolation)
 
         Returns:
             Summary of extraction results
@@ -157,17 +159,19 @@ class EntityManager:
         self,
         entity_name: str,
         user_id: str,
-        entity_type: Optional[str] = None
+        entity_type: Optional[str] = None,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
         """
-        Get all memories that reference a specific entity.
+        Get all memories that reference a specific entity (scoped to user_name).
 
         This enables queries like "show everything related to UserAuth".
         """
         async with self.db.get_session() as session:
-            # Find the entity
+            # Find the entity (scoped to user_name)
             query = select(ExtractedEntity).where(
                 ExtractedEntity.user_id == user_id,
+                ExtractedEntity.user_name == user_name,
                 or_(
                     ExtractedEntity.name == entity_name,
                     ExtractedEntity.qualified_name == entity_name
@@ -235,13 +239,15 @@ class EntityManager:
         self,
         user_id: str,
         entity_type: Optional[str] = None,
-        limit: int = 20
+        limit: int = 20,
+        user_name: str = "default",
     ) -> List[Dict[str, Any]]:
-        """Get most frequently mentioned entities."""
+        """Get most frequently mentioned entities (scoped to user_name)."""
         async with self.db.get_session() as session:
             query = (
                 select(ExtractedEntity)
                 .where(ExtractedEntity.user_id == user_id)
+                .where(ExtractedEntity.user_name == user_name)
                 .order_by(ExtractedEntity.mention_count.desc())
                 .limit(limit)
             )

@@ -109,11 +109,13 @@ class FailedDecisionReview(DreamStrategy):
         evidence, and persists actionable insights.
         """
         session.strategies_run.append(self.name)
+        user_name = getattr(ctx, "current_user", "default") or "default"
         self._logger.info(
-            "Dream session %s: Starting FailedDecisionReview", session.session_id
+            "Dream session %s: Starting FailedDecisionReview (user_name=%s)",
+            session.session_id, user_name,
         )
 
-        decisions = await self._get_failed_decisions(ctx)
+        decisions = await self._get_failed_decisions(ctx, user_name)
 
         if not decisions:
             self._logger.info("No failed decisions to review")
@@ -127,11 +129,11 @@ class FailedDecisionReview(DreamStrategy):
 
             session.decisions_reviewed += 1
 
-            result = await self._re_evaluate_decision(decision, ctx)
+            result = await self._re_evaluate_decision(decision, ctx, user_name)
             session.results.append(result)
 
             if result.result_type != "needs_more_data":
-                await persist_dream_result(ctx.memory_manager, result, session)
+                await persist_dream_result(ctx.memory_manager, result, session, user_name=user_name)
                 session.insights_generated += 1
 
             # COOPERATIVE YIELD: give event loop a tick
@@ -140,7 +142,7 @@ class FailedDecisionReview(DreamStrategy):
         return session
 
     async def _get_failed_decisions(
-        self, ctx: "UserContext"
+        self, ctx: "UserContext", user_name: str = "default",
     ) -> List[Any]:
         """Query worked=False decisions from the database.
 
@@ -148,6 +150,7 @@ class FailedDecisionReview(DreamStrategy):
         decision processing loop) to avoid transaction timeouts.
 
         Filters:
+        - user_name matches current user
         - worked == False
         - archived == False
         - created_at < age_cutoff (skip too-recent decisions)
@@ -161,6 +164,7 @@ class FailedDecisionReview(DreamStrategy):
             async with ctx.db_manager.get_session() as db_session:
                 result = await db_session.execute(
                     select(Memory)
+                    .where(Memory.user_name == user_name)
                     .where(Memory.worked == False)  # noqa: E712
                     .where(Memory.archived == False)  # noqa: E712
                     .where(Memory.created_at < age_cutoff)
@@ -174,7 +178,7 @@ class FailedDecisionReview(DreamStrategy):
 
                 # Find recently-reviewed decision IDs within cooldown window
                 recently_reviewed_ids = await self._get_recently_reviewed_ids(
-                    db_session
+                    db_session, user_name,
                 )
 
                 original_count = len(decisions)
@@ -196,7 +200,7 @@ class FailedDecisionReview(DreamStrategy):
             return []
 
     async def _get_recently_reviewed_ids(
-        self, db_session
+        self, db_session, user_name: str = "default",
     ) -> set:
         """Get IDs of decisions that were reviewed within the cooldown window.
 
@@ -209,6 +213,7 @@ class FailedDecisionReview(DreamStrategy):
         )
         result = await db_session.execute(
             select(Memory)
+            .where(Memory.user_name == user_name)
             .where(Memory.category == "learning")
             .where(Memory.created_at >= cooldown_cutoff)
         )
@@ -231,7 +236,7 @@ class FailedDecisionReview(DreamStrategy):
         return reviewed_ids
 
     async def _re_evaluate_decision(
-        self, decision: Any, ctx: "UserContext"
+        self, decision: Any, ctx: "UserContext", user_name: str = "default",
     ) -> DreamResult:
         """Re-evaluate a single failed decision against current evidence.
 
@@ -249,9 +254,9 @@ class FailedDecisionReview(DreamStrategy):
             # Use first 200 chars of decision as search query
             query = decision.content[:200]
 
-            # Gather current evidence from memory
+            # Gather current evidence from memory (user-scoped)
             evidence = await ctx.memory_manager.recall(
-                query, limit=5, user_id=ctx.user_id
+                query, limit=5, user_id=ctx.user_id, user_name=user_name,
             )
 
             # Extract evidence from flat memories list (new format)
@@ -351,12 +356,14 @@ class ConnectionDiscovery(DreamStrategy):
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         session.strategies_run.append(self.name)
+        user_name = getattr(ctx, "current_user", "default") or "default"
         self._logger.info(
-            "Dream session %s: Starting ConnectionDiscovery", session.session_id
+            "Dream session %s: Starting ConnectionDiscovery (user_name=%s)",
+            session.session_id, user_name,
         )
 
         try:
-            unlinked_pairs = await self._find_unlinked_pairs(ctx)
+            unlinked_pairs = await self._find_unlinked_pairs(ctx, user_name)
         except Exception as e:
             self._logger.warning("ConnectionDiscovery query failed: %s", e)
             return session
@@ -394,9 +401,11 @@ class ConnectionDiscovery(DreamStrategy):
         return session
 
     async def _find_unlinked_pairs(
-        self, ctx: "UserContext"
+        self, ctx: "UserContext", user_name: str = "default",
     ) -> List[Tuple[int, int, Set[str]]]:
         """Find memory pairs sharing entities but lacking relationship edges.
+
+        Only considers memories belonging to the given user_name.
 
         Returns:
             List of (source_id, target_id, shared_entity_names) tuples.
@@ -405,12 +414,14 @@ class ConnectionDiscovery(DreamStrategy):
 
         async with ctx.db_manager.get_session() as db_session:
             # Fetch entity refs within the lookback window joined to Memory
+            # Scoped to current user to prevent cross-user connections
             rows = await db_session.execute(
                 select(
                     MemoryEntityRef.entity_id,
                     MemoryEntityRef.memory_id,
                 )
                 .join(Memory, Memory.id == MemoryEntityRef.memory_id)
+                .where(Memory.user_name == user_name)
                 .where(Memory.created_at >= cutoff)
             )
             refs = rows.all()
@@ -499,8 +510,10 @@ class CommunityRefresh(DreamStrategy):
         scheduler: "IdleDreamScheduler",
     ) -> DreamSession:
         session.strategies_run.append(self.name)
+        user_name = getattr(ctx, "current_user", "default") or "default"
         self._logger.info(
-            "Dream session %s: Starting CommunityRefresh", session.session_id
+            "Dream session %s: Starting CommunityRefresh (user_name=%s)",
+            session.session_id, user_name,
         )
 
         # Early return if leidenalg is not installed
@@ -513,7 +526,7 @@ class CommunityRefresh(DreamStrategy):
             return session
 
         try:
-            is_stale = await self._check_staleness(ctx)
+            is_stale = await self._check_staleness(ctx, user_name)
         except Exception as e:
             self._logger.warning("CommunityRefresh staleness check failed: %s", e)
             return session
@@ -538,10 +551,12 @@ class CommunityRefresh(DreamStrategy):
             communities = await cm.detect_communities_from_graph(
                 user_id=ctx.user_id,
                 knowledge_graph=kg,
+                user_name=user_name,
             )
             await cm.save_communities(
                 user_id=ctx.user_id,
                 communities=communities,
+                user_name=user_name,
             )
             session.insights_generated += 1
             ctx.memory_manager.invalidate_graph_cache()
@@ -553,26 +568,32 @@ class CommunityRefresh(DreamStrategy):
 
         return session
 
-    async def _check_staleness(self, ctx: "UserContext") -> bool:
-        """Return True if communities are stale (enough new memories since last build)."""
+    async def _check_staleness(self, ctx: "UserContext", user_name: str = "default") -> bool:
+        """Return True if communities are stale (enough new memories since last build).
+
+        Scoped to the given user_name -- only checks that user's memories and communities.
+        """
         async with ctx.db_manager.get_session() as db_session:
-            # Get the most recent community creation timestamp
+            # Get the most recent community creation timestamp for this user
             result = await db_session.execute(
                 select(func.max(MemoryCommunity.created_at))
+                .where(MemoryCommunity.user_name == user_name)
             )
             last_community_at = result.scalar()
 
             if last_community_at is None:
-                # No communities exist yet -- check if there are enough memories
+                # No communities exist yet for this user -- check if there are enough memories
                 count_result = await db_session.execute(
                     select(func.count(Memory.id))
+                    .where(Memory.user_name == user_name)
                 )
                 total = count_result.scalar() or 0
                 return total >= self._staleness_threshold
 
-            # Count memories created since the last community build
+            # Count memories created since the last community build for this user
             count_result = await db_session.execute(
                 select(func.count(Memory.id))
+                .where(Memory.user_name == user_name)
                 .where(Memory.created_at > last_community_at)
             )
             new_count = count_result.scalar() or 0
@@ -620,12 +641,13 @@ class PendingOutcomeResolver(DreamStrategy):
     ) -> DreamSession:
         """Execute the PendingOutcomeResolver strategy."""
         session.strategies_run.append(self.name)
+        user_name = getattr(ctx, "current_user", "default") or "default"
         self._logger.info(
-            "Dream session %s: Starting PendingOutcomeResolver (dry_run=%s)",
-            session.session_id, self._dry_run,
+            "Dream session %s: Starting PendingOutcomeResolver (dry_run=%s, user_name=%s)",
+            session.session_id, self._dry_run, user_name,
         )
 
-        decisions = await self._get_pending_decisions(ctx)
+        decisions = await self._get_pending_decisions(ctx, user_name)
 
         if not decisions:
             self._logger.info("No pending decisions to resolve")
@@ -639,7 +661,7 @@ class PendingOutcomeResolver(DreamStrategy):
 
             session.decisions_reviewed += 1
 
-            result = await self._evaluate_decision(decision, ctx)
+            result = await self._evaluate_decision(decision, ctx, user_name)
             session.results.append(result)
 
             if result.result_type in ("auto_resolved_success", "auto_resolved_failure"):
@@ -674,7 +696,7 @@ class PendingOutcomeResolver(DreamStrategy):
 
             # Persist actionable results (not insufficient_evidence)
             if result.result_type != "insufficient_evidence":
-                await persist_dream_result(ctx.memory_manager, result, session)
+                await persist_dream_result(ctx.memory_manager, result, session, user_name=user_name)
                 session.insights_generated += 1
 
             # COOPERATIVE YIELD: give event loop a tick
@@ -683,11 +705,12 @@ class PendingOutcomeResolver(DreamStrategy):
         return session
 
     async def _get_pending_decisions(
-        self, ctx: "UserContext"
+        self, ctx: "UserContext", user_name: str = "default",
     ) -> List[Any]:
         """Query pending goals (outcome IS NULL, worked IS NULL).
 
         Filters:
+        - user_name matches current user
         - 'goal' in categories (or legacy category == 'decision')
         - outcome IS NULL AND worked IS NULL
         - archived == False
@@ -703,8 +726,10 @@ class PendingOutcomeResolver(DreamStrategy):
             )
             async with ctx.db_manager.get_session() as db_session:
                 # Query for 'goal' in categories JSON or legacy 'decision' category
+                # Scoped to current user
                 result = await db_session.execute(
                     select(Memory)
+                    .where(Memory.user_name == user_name)
                     .where(or_(
                         text("EXISTS (SELECT 1 FROM json_each(memories.categories) WHERE json_each.value = 'goal')"),
                         Memory.category == "decision"  # Legacy support
@@ -723,7 +748,7 @@ class PendingOutcomeResolver(DreamStrategy):
 
                 # Filter out recently reviewed decisions
                 recently_reviewed_ids = await self._get_recently_reviewed_ids(
-                    db_session
+                    db_session, user_name,
                 )
 
                 original_count = len(decisions)
@@ -745,7 +770,7 @@ class PendingOutcomeResolver(DreamStrategy):
             return []
 
     async def _get_recently_reviewed_ids(
-        self, db_session
+        self, db_session, user_name: str = "default",
     ) -> set:
         """Get IDs of pending decisions reviewed within the cooldown window.
 
@@ -757,6 +782,7 @@ class PendingOutcomeResolver(DreamStrategy):
         )
         result = await db_session.execute(
             select(Memory)
+            .where(Memory.user_name == user_name)
             .where(Memory.category == "learning")
             .where(Memory.created_at >= cooldown_cutoff)
         )
@@ -779,12 +805,12 @@ class PendingOutcomeResolver(DreamStrategy):
         return reviewed_ids
 
     async def _evaluate_decision(
-        self, decision: Any, ctx: "UserContext"
+        self, decision: Any, ctx: "UserContext", user_name: str = "default",
     ) -> DreamResult:
         """Evaluate a pending decision using evidence from memory.
 
         Evidence algorithm:
-        1. recall(decision.content[:200], limit=10)
+        1. recall(decision.content[:200], limit=10) -- user-scoped
         2. Exclude self-references (matching decision.id)
         3. Classify: worked=True → positive, worked=False OR category=warning → negative
         4. Decision tree based on counts and threshold
@@ -793,7 +819,7 @@ class PendingOutcomeResolver(DreamStrategy):
             query = decision.content[:200]
 
             evidence = await ctx.memory_manager.recall(
-                query, limit=10, user_id=ctx.user_id
+                query, limit=10, user_id=ctx.user_id, user_name=user_name,
             )
 
             # Gather evidence from flat memories list (new format)

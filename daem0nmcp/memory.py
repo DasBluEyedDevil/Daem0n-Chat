@@ -583,7 +583,8 @@ class MemoryManager:
                     memory_id=memory_id,
                     content=content,
                     user_id=user_id,
-                    rationale=rationale
+                    rationale=rationale,
+                    user_name=effective_user_name,
                 )
             except Exception as e:
                 logger.debug(f"Entity extraction failed (non-fatal): {e}")
@@ -1625,7 +1626,8 @@ class MemoryManager:
                     user_id=user_id,
                     memory_id=memory_id,
                     reason=f"Auto-activated: Failed decision - {truncated_outcome}",
-                    priority=10  # High priority for failures
+                    priority=10,  # High priority for failures
+                    user_name=memory_user_name,
                 )
             except Exception as e:
                 logger.debug(f"Could not auto-activate failed decision: {e}")

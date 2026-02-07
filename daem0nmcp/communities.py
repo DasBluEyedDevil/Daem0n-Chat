@@ -47,6 +47,7 @@ class CommunityManager:
         user_id: str,
         min_community_size: int = 2,
         min_shared_tags: int = 2,
+        user_name: str = "default",
     ) -> List[Dict[str, Any]]:
         """
         Detect communities based on tag co-occurrence (legacy method).
@@ -65,17 +66,16 @@ class CommunityManager:
             user_id: Project to analyze
             min_community_size: Minimum members for a community
             min_shared_tags: Minimum shared tags to cluster together
+            user_name: Which user's memories to analyze (multi-user isolation)
 
         Returns:
             List of detected community dicts (not yet persisted)
         """
         async with self.db.get_session() as session:
-            # Get all non-archived memories with tags
-            # Note: user_id is used when saving communities, not filtering memories.
-            # Each project has its own .daem0nmcp database directory, so all memories
-            # in this database already belong to this project.
+            # Get all non-archived memories with tags, scoped to user_name
             result = await session.execute(
                 select(Memory).where(
+                    Memory.user_name == user_name,
                     Memory.tags.isnot(None),
                     (Memory.archived == False) | (Memory.archived.is_(None))  # noqa: E712
                 )
@@ -194,6 +194,7 @@ class CommunityManager:
         knowledge_graph: Optional[KnowledgeGraph] = None,
         resolution: float = 1.0,
         min_community_size: int = 2,
+        user_name: str = "default",
     ) -> List[Dict[str, Any]]:
         """
         Detect communities using Leiden algorithm on the knowledge graph.
@@ -206,6 +207,7 @@ class CommunityManager:
             knowledge_graph: Optional pre-loaded graph (will create if not provided)
             resolution: Leiden resolution parameter (>1 = smaller communities)
             min_community_size: Minimum members for a community
+            user_name: Which user's memories to analyze (multi-user isolation)
 
         Returns:
             List of detected community dicts (not yet persisted)
@@ -338,6 +340,7 @@ class CommunityManager:
         user_id: str,
         communities: List[Dict[str, Any]],
         replace_existing: bool = True,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
         """
         Persist detected communities to the database.
@@ -349,6 +352,7 @@ class CommunityManager:
             user_id: Project these communities belong to
             communities: List of community dicts from detect methods
             replace_existing: If True, delete existing communities first
+            user_name: Which user these communities belong to (multi-user isolation)
 
         Returns:
             Status with created count
@@ -357,7 +361,8 @@ class CommunityManager:
             if replace_existing:
                 await session.execute(
                     delete(MemoryCommunity).where(
-                        MemoryCommunity.user_id == user_id
+                        MemoryCommunity.user_id == user_id,
+                        MemoryCommunity.user_name == user_name,
                     )
                 )
 
@@ -377,6 +382,7 @@ class CommunityManager:
 
                 community = MemoryCommunity(
                     user_id=user_id,
+                    user_name=user_name,
                     name=comm["name"],
                     summary=summary,
                     tags=tags,
@@ -397,21 +403,24 @@ class CommunityManager:
     async def get_communities(
         self,
         user_id: str,
-        level: Optional[int] = None
+        level: Optional[int] = None,
+        user_name: str = "default",
     ) -> List[Dict[str, Any]]:
         """
-        Get all communities for a project.
+        Get all communities for a project, scoped to user_name.
 
         Args:
             user_id: Project to get communities for
             level: Optional filter by hierarchy level
+            user_name: Which user's communities to retrieve (multi-user isolation)
 
         Returns:
             List of community dicts
         """
         async with self.db.get_session() as session:
             query = select(MemoryCommunity).where(
-                MemoryCommunity.user_id == user_id
+                MemoryCommunity.user_id == user_id,
+                MemoryCommunity.user_name == user_name,
             )
 
             if level is not None:

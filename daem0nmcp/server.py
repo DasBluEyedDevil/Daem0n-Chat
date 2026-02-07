@@ -133,7 +133,8 @@ if settings.dream_enabled:
                     break
 
             session.ended_at = _dt.now(_tz.utc)
-            await persist_session_summary(ctx.memory_manager, session)
+            user_name = getattr(ctx, "current_user", "default") or "default"
+            await persist_session_summary(ctx.memory_manager, session, user_name=user_name)
         except Exception as e:
             _dream_logger.error("Dream session failed: %s", e, exc_info=True)
 

@@ -38,7 +38,8 @@ class ActiveContextManager:
         memory_id: int,
         reason: Optional[str] = None,
         priority: int = 0,
-        expires_at: Optional[datetime] = None
+        expires_at: Optional[datetime] = None,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
         """
         Add a memory to the active working context.
@@ -49,21 +50,25 @@ class ActiveContextManager:
             reason: Why this memory should be in active context
             priority: Higher priority = shown first (default: 0)
             expires_at: Optional auto-expiry timestamp
+            user_name: Which user this context belongs to (multi-user isolation)
 
         Returns:
             Status dict with added item info
         """
         async with self.db.get_session() as session:
-            # Verify memory exists
+            # Verify memory exists and belongs to this user
             memory = await session.get(Memory, memory_id)
             if not memory:
                 return {"error": f"Memory {memory_id} not found"}
+            if memory.user_name != user_name:
+                return {"error": f"Memory {memory_id} does not belong to user '{user_name}'"}
 
-            # Check if already in context
+            # Check if already in context (scoped to user_name)
             existing = await session.execute(
                 select(ActiveContextItem).where(
                     ActiveContextItem.user_id == user_id,
-                    ActiveContextItem.memory_id == memory_id
+                    ActiveContextItem.user_name == user_name,
+                    ActiveContextItem.memory_id == memory_id,
                 )
             )
             if existing.scalar_one_or_none():
@@ -73,10 +78,11 @@ class ActiveContextManager:
                     "message": "Memory is already in active context"
                 }
 
-            # Check count limit
+            # Check count limit (per user_name)
             count_result = await session.execute(
                 select(func.count(ActiveContextItem.id))
                 .where(ActiveContextItem.user_id == user_id)
+                .where(ActiveContextItem.user_name == user_name)
             )
             current_count = count_result.scalar() or 0
 
@@ -87,18 +93,19 @@ class ActiveContextManager:
                     "current_count": current_count
                 }
 
-            # Add to context
+            # Add to context with user_name
             item = ActiveContextItem(
                 user_id=user_id,
+                user_name=user_name,
                 memory_id=memory_id,
                 priority=priority,
                 reason=reason,
-                expires_at=expires_at
+                expires_at=expires_at,
             )
             session.add(item)
             await session.flush()
 
-            logger.info(f"Added memory {memory_id} to active context for {user_id}")
+            logger.info(f"Added memory {memory_id} to active context for {user_id} (user_name={user_name})")
 
             return {
                 "status": "added",
@@ -113,14 +120,16 @@ class ActiveContextManager:
     async def remove_from_context(
         self,
         user_id: str,
-        memory_id: int
+        memory_id: int,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
-        """Remove a memory from active context."""
+        """Remove a memory from active context (scoped to user_name)."""
         async with self.db.get_session() as session:
             result = await session.execute(
                 delete(ActiveContextItem).where(
                     ActiveContextItem.user_id == user_id,
-                    ActiveContextItem.memory_id == memory_id
+                    ActiveContextItem.user_name == user_name,
+                    ActiveContextItem.memory_id == memory_id,
                 )
             )
 
@@ -139,7 +148,8 @@ class ActiveContextManager:
         self,
         user_id: str,
         include_expired: bool = False,
-        condensed: bool = False
+        condensed: bool = False,
+        user_name: str = "default",
     ) -> Dict[str, Any]:
         """
         Get all items in the active working context.
@@ -148,6 +158,7 @@ class ActiveContextManager:
             user_id: Project to get context for
             include_expired: Include expired items (default: False)
             condensed: Return truncated content for token efficiency (default: False)
+            user_name: Which user's context to retrieve (multi-user isolation)
 
         Returns memories with full or condensed content, ordered by priority.
         """
@@ -156,6 +167,7 @@ class ActiveContextManager:
                 select(ActiveContextItem, Memory)
                 .join(Memory, ActiveContextItem.memory_id == Memory.id)
                 .where(ActiveContextItem.user_id == user_id)
+                .where(ActiveContextItem.user_name == user_name)
                 .order_by(ActiveContextItem.priority.desc())
             )
 
@@ -207,12 +219,13 @@ class ActiveContextManager:
                 "items": items
             }
 
-    async def clear_context(self, user_id: str) -> Dict[str, Any]:
-        """Clear all items from active context."""
+    async def clear_context(self, user_id: str, user_name: str = "default") -> Dict[str, Any]:
+        """Clear all items from active context (scoped to user_name)."""
         async with self.db.get_session() as session:
             result = await session.execute(
                 delete(ActiveContextItem).where(
-                    ActiveContextItem.user_id == user_id
+                    ActiveContextItem.user_id == user_id,
+                    ActiveContextItem.user_name == user_name,
                 )
             )
 
@@ -221,16 +234,17 @@ class ActiveContextManager:
                 "removed_count": result.rowcount
             }
 
-    async def cleanup_expired(self, user_id: str) -> Dict[str, Any]:
-        """Remove expired items from active context."""
+    async def cleanup_expired(self, user_id: str, user_name: str = "default") -> Dict[str, Any]:
+        """Remove expired items from active context (scoped to user_name)."""
         now = datetime.now(timezone.utc)
 
         async with self.db.get_session() as session:
             result = await session.execute(
                 delete(ActiveContextItem).where(
                     ActiveContextItem.user_id == user_id,
+                    ActiveContextItem.user_name == user_name,
                     ActiveContextItem.expires_at.isnot(None),
-                    ActiveContextItem.expires_at <= now
+                    ActiveContextItem.expires_at <= now,
                 )
             )
 

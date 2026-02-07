@@ -130,9 +130,11 @@ async def _gather_evidence(
     Returns:
         A fully populated :class:`DebateArgument`.
     """
+    user_name = getattr(ctx, "current_user", "default") or "default"
     recall_result = await ctx.memory_manager.recall(
         topic=f"{topic} {position}",
         user_id=ctx.user_id,
+        user_name=user_name,
         limit=10,
     )
 
@@ -421,6 +423,7 @@ async def _run_debate_inner(
     # Persist consensus memory (TOOL-04)
     # ------------------------------------------------------------------
     consensus_memory_id: Optional[int] = None
+    user_name = getattr(ctx, "current_user", "default") or "default"
     try:
         remember_result = await ctx.memory_manager.remember(
             categories=["fact"],  # Debate consensus is factual knowledge
@@ -447,6 +450,7 @@ async def _run_debate_inner(
                 "all_evidence_ids": all_evidence_ids,
             },
             user_id=user_id,
+            user_name=user_name,
         )
         # Extract consensus memory ID from the remember() result
         if isinstance(remember_result, dict):

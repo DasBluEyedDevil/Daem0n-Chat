@@ -192,6 +192,12 @@ class TFIDFIndex:
     A simple but effective TF-IDF index for document similarity.
 
     This is intentionally lightweight - no external ML deps required.
+
+    Multi-user note: The TF-IDF index is built from ALL memories regardless
+    of user_name. This is intentional -- IDF benefits from more documents.
+    However, callers MUST post-filter search results by user_name before
+    returning them to ensure per-user isolation. The MemoryManager.recall()
+    method handles this via SQL WHERE clause on Memory.user_name.
     """
 
     def __init__(self, max_query_cache_size: int = 100):
