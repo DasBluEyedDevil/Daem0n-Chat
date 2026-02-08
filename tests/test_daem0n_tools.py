@@ -2224,3 +2224,358 @@ class TestEmotionDetection:
             assert "fact" in call_kwargs["categories"]
             assert "emotion" in call_kwargs["categories"]
             assert "emotion:excited" in call_kwargs["tags"]
+
+
+class TestSessionSummary:
+    """Tests for session boundary detection, summary generation, and briefing integration."""
+
+    def _make_memory(
+        self, content, created_at, categories=None, tags=None, outcome=None,
+        archived=False, user_name="TestUser", mem_id=None,
+    ):
+        """Create a mock Memory object with the given attributes."""
+        mem = MagicMock()
+        mem.id = mem_id or id(mem)
+        mem.content = content
+        mem.created_at = created_at
+        mem.categories = categories or []
+        mem.tags = tags or []
+        mem.outcome = outcome
+        mem.archived = archived
+        mem.user_name = user_name
+        mem.is_permanent = False
+        return mem
+
+    def _mock_ctx_with_memories(self, memories):
+        """Create a mock context that returns given memories from DB query."""
+        ctx = MagicMock()
+        ctx.user_id = "/test/user"
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = memories
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = mock_scalars
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        ctx.db_manager.get_session.return_value = mock_session
+
+        return ctx
+
+    # --- Session boundary detection tests ---
+
+    @pytest.mark.asyncio
+    async def test_session_boundary_two_hour_gap(self):
+        """6 memories with a 3-hour gap splits into 2 sessions; selects session A (3 memories)."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        # Session A (recent): 3 memories within 30 minutes
+        session_a = [
+            self._make_memory("Topic A1", now - timedelta(minutes=0)),
+            self._make_memory("Topic A2", now - timedelta(minutes=15)),
+            self._make_memory("Topic A3", now - timedelta(minutes=30)),
+        ]
+        # Session B (older): 3 memories within 30 minutes, 3 hours before session A
+        session_b = [
+            self._make_memory("Topic B1", now - timedelta(hours=3, minutes=30)),
+            self._make_memory("Topic B2", now - timedelta(hours=3, minutes=45)),
+            self._make_memory("Topic B3", now - timedelta(hours=4)),
+        ]
+        # Combined desc order
+        all_mems = session_a + session_b
+
+        ctx = self._mock_ctx_with_memories(all_mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert result["memory_count"] == 3
+        assert len(result["topics"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_session_boundary_no_gap_single_session(self):
+        """5 memories all within 1 hour treated as one session."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory(f"Topic {i}", now - timedelta(minutes=i * 10))
+            for i in range(5)
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert result["memory_count"] == 5
+
+    @pytest.mark.asyncio
+    async def test_session_too_few_memories_returns_none(self):
+        """Single memory returns None (fewer than 2)."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [self._make_memory("Solo topic", now)]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is None
+
+    # --- Summary content tests ---
+
+    @pytest.mark.asyncio
+    async def test_summary_extracts_topics(self):
+        """Topics are extracted from memory content summaries."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory("Working on the garden project", now),
+            self._make_memory("Planning a vacation to Italy", now - timedelta(minutes=10)),
+            self._make_memory("Worried about the car repair", now - timedelta(minutes=20)),
+            self._make_memory("Learning to play guitar", now - timedelta(minutes=30)),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert len(result["topics"]) == 4
+        assert any("garden" in t.lower() for t in result["topics"])
+        assert any("guitar" in t.lower() for t in result["topics"])
+
+    @pytest.mark.asyncio
+    async def test_summary_deduplicates_topics(self):
+        """Duplicate content summaries are deduplicated (case-insensitive)."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory("Working on the garden project", now),
+            self._make_memory("Working on the garden project", now - timedelta(minutes=10)),
+            self._make_memory("Planning a vacation", now - timedelta(minutes=20)),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        # Only 2 unique topics (garden deduplicated)
+        assert len(result["topics"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_summary_extracts_emotional_tone(self):
+        """Emotional tone extracted from emotion-tagged memories."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory(
+                "I'm stressed about the deadline",
+                now,
+                categories=["context", "emotion"],
+                tags=["emotion:stressed", "valence:negative"],
+            ),
+            self._make_memory("Working on the report", now - timedelta(minutes=10)),
+            self._make_memory("Meeting with the team", now - timedelta(minutes=20)),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert result["emotional_tone"] == "stressed"
+
+    @pytest.mark.asyncio
+    async def test_summary_no_emotion_returns_none_tone(self):
+        """No emotion-tagged memories results in None emotional_tone."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory("Working on the garden", now, categories=["context"]),
+            self._make_memory("Planning a trip", now - timedelta(minutes=10)),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert result["emotional_tone"] is None
+
+    @pytest.mark.asyncio
+    async def test_summary_finds_unresolved_threads(self):
+        """Unresolved concern/goal memories appear in unresolved_from_session."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory(
+                "Worried about the job interview",
+                now,
+                categories=["concern"],
+                outcome=None,
+            ),
+            self._make_memory("Had a nice lunch", now - timedelta(minutes=10)),
+            self._make_memory(
+                "Want to finish the book",
+                now - timedelta(minutes=20),
+                categories=["goal"],
+                outcome=None,
+            ),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        assert len(result["unresolved_from_session"]) == 2
+        assert any("interview" in u.lower() for u in result["unresolved_from_session"])
+        assert any("book" in u.lower() for u in result["unresolved_from_session"])
+
+    @pytest.mark.asyncio
+    async def test_summary_text_is_concise(self):
+        """Summary text is at most 3 sentences."""
+        from daem0nmcp.tools.daem0n_briefing import _build_previous_session_summary
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+        mems = [
+            self._make_memory(
+                "Stressed about work",
+                now,
+                categories=["concern", "emotion"],
+                tags=["emotion:stressed", "valence:negative"],
+                outcome=None,
+            ),
+            self._make_memory("Planning a trip to Japan", now - timedelta(minutes=10)),
+            self._make_memory(
+                "Goal: run a marathon",
+                now - timedelta(minutes=20),
+                categories=["goal"],
+                outcome=None,
+            ),
+        ]
+
+        ctx = self._mock_ctx_with_memories(mems)
+        result = await _build_previous_session_summary(ctx, "TestUser")
+
+        assert result is not None
+        # Count sentences by splitting on '. ' boundaries (summary ends with '.')
+        summary = result["summary"]
+        # Remove trailing period, then split by '. '
+        sentences = [s.strip() for s in summary.rstrip(".").split(". ") if s.strip()]
+        assert len(sentences) <= 3, f"Summary has {len(sentences)} sentences: {summary}"
+
+    # --- Briefing integration tests ---
+
+    @pytest.mark.asyncio
+    async def test_briefing_includes_session_summary(self):
+        """Full briefing includes previous_session_summary for returning user with sessions."""
+        from daem0nmcp.tools.daem0n_briefing import _build_user_briefing
+
+        now = datetime(2026, 2, 8, 12, 0, tzinfo=timezone.utc)
+
+        # Create mock memories for session summary DB query
+        session_mems = [
+            self._make_memory("Topic one", now, mem_id=101),
+            self._make_memory("Topic two", now - timedelta(minutes=10), mem_id=102),
+            self._make_memory("Topic three", now - timedelta(minutes=20), mem_id=103),
+            self._make_memory("Topic four", now - timedelta(minutes=30), mem_id=104),
+            self._make_memory("Topic five", now - timedelta(minutes=40), mem_id=105),
+        ]
+
+        ctx = MagicMock()
+        ctx.user_id = "/test/user"
+
+        call_count = {"n": 0}
+
+        async def mock_execute(query):
+            call_count["n"] += 1
+            result = MagicMock()
+            # Various DB queries in _build_user_briefing:
+            # unresolved threads, recent topics, emotional context, session summary
+            result.scalars.return_value = MagicMock(
+                all=MagicMock(return_value=session_mems)
+            )
+            return result
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        ctx.db_manager.get_session.return_value = mock_session
+
+        # Mock recall to return empty
+        ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+
+        result = await _build_user_briefing(ctx, "TestUser")
+
+        assert "previous_session_summary" in result
+        assert "topics" in result["previous_session_summary"]
+        assert "summary" in result["previous_session_summary"]
+        assert result["previous_session_summary"]["memory_count"] == 5
+
+    @pytest.mark.asyncio
+    async def test_briefing_omits_summary_when_no_session(self):
+        """Briefing omits previous_session_summary when user has 0 memories."""
+        from daem0nmcp.tools.daem0n_briefing import _build_user_briefing
+
+        ctx = MagicMock()
+        ctx.user_id = "/test/user"
+
+        async def mock_execute(query):
+            result = MagicMock()
+            result.scalars.return_value = MagicMock(
+                all=MagicMock(return_value=[])
+            )
+            return result
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        ctx.db_manager.get_session.return_value = mock_session
+
+        ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+
+        result = await _build_user_briefing(ctx, "TestUser")
+
+        assert "previous_session_summary" not in result
+
+    # --- Greeting guidance tone tests ---
+
+    def test_greeting_guidance_tone_aware(self):
+        """Greeting guidance prepends tone warning when previous session was negative."""
+        from daem0nmcp.tools.daem0n_briefing import _build_greeting_guidance
+
+        guidance = _build_greeting_guidance(
+            greeting_name="Alice",
+            unresolved_threads=[],
+            recent_topics=[],
+            emotional_context=None,
+            active_routines=[],
+            previous_session_tone="stressed",
+        )
+
+        assert "warm and gentle" in guidance.lower()
+        assert "stressed" in guidance.lower()
+
+    def test_greeting_guidance_no_tone_no_change(self):
+        """Greeting guidance has no tone warning when previous_session_tone is None."""
+        from daem0nmcp.tools.daem0n_briefing import _build_greeting_guidance
+
+        guidance = _build_greeting_guidance(
+            greeting_name="Alice",
+            unresolved_threads=[],
+            recent_topics=[],
+            emotional_context=None,
+            active_routines=[],
+            previous_session_tone=None,
+        )
+
+        assert "warm and gentle" not in guidance.lower()
+        assert "last conversation" not in guidance.lower()
