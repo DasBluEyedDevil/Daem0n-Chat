@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: User Profiles & Multi-User** - Build user profile system with isolated per-user memory storage ✓ COMPLETE
 - [x] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability ✓ COMPLETE
 - [x] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay ✓ COMPLETE
-- [ ] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context
+- [x] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context ✓ COMPLETE
 - [ ] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection
 - [ ] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall
 - [ ] **Phase 8: Adaptive Personality** - Learn and mirror user communication style over time
@@ -97,8 +97,8 @@ Plans:
 **Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 05-01-PLAN.md — Temporal context & greeting guidance: create _humanize_timedelta utility, enrich briefing with time_ago fields and greeting_guidance, add time_ago to recall results
-- [ ] 05-02-PLAN.md — Thread detection & surfacing: refactor thread detection with priority scoring, follow-up types, 90-day staleness cutoff, mid-conversation surfacing guidance, recurring theme duration
+- [x] 05-01-PLAN.md — Temporal context & greeting guidance: create _humanize_timedelta utility, enrich briefing with time_ago fields and greeting_guidance, add time_ago to recall results
+- [x] 05-02-PLAN.md — Thread detection & surfacing: refactor thread detection with priority scoring, follow-up types, 90-day staleness cutoff, mid-conversation surfacing guidance, recurring theme duration
 
 ### Phase 6: Conversation Intelligence
 **Goal**: Each conversation session is summarized with emotional context, and the system understands not just what was discussed but how the user felt about it
@@ -109,11 +109,11 @@ Plans:
   2. Memories store emotional context alongside facts (e.g., "user was stressed about work deadline", "user was excited about upcoming trip")
   3. System detects emotional context from conversation clues: topic sentiment, emphasis patterns (ALL CAPS, exclamation marks), and explicit emotional statements
   4. Summaries are concise (1-3 sentences per session) and do not distort or fabricate details from the conversation
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md — Emotion detection & memory enrichment: create emotion_detect.py with three detection methods (explicit statements, emphasis patterns, topic sentiment), wire into daem0n_remember for automatic emotion tagging
+- [ ] 06-02-PLAN.md — Session summarization & briefing: generate previous-session summaries at briefing time using 2-hour time-gap heuristic, add emotional tone to greeting guidance
 
 ### Phase 7: Knowledge Graph Adaptation
 **Goal**: Claude can map and traverse relationships between people, places, pets, and organizations in the user's life, enabling relational recall
@@ -172,7 +172,7 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | 2. User Profiles & Multi-User | 3/3 | ✓ Complete | 2026-02-07 |
 | 3. Explicit Memory Capture & Control | 2/2 | ✓ Complete | 2026-02-08 |
 | 4. Auto-Detection & Memory Decay | 2/2 | ✓ Complete | 2026-02-08 |
-| 5. Session Experience | 0/2 | Not started | - |
+| 5. Session Experience | 2/2 | ✓ Complete | 2026-02-08 |
 | 6. Conversation Intelligence | 0/2 | Not started | - |
 | 7. Knowledge Graph Adaptation | 0/2 | Not started | - |
 | 8. Adaptive Personality | 0/2 | Not started | - |
