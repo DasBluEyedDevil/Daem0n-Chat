@@ -1,5 +1,6 @@
 """daem0n_briefing -- Conversational session briefing with multi-user identity."""
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
@@ -42,6 +43,204 @@ def _summarize(content: str, max_len: int = 80) -> str:
     """Truncate content to max length."""
     content = content.strip()
     return content if len(content) <= max_len else content[:max_len - 3] + "..."
+
+
+# --- Category weights for priority scoring ---
+_CATEGORY_WEIGHTS = {
+    "concern": 3.0,
+    "goal": 2.0,
+    "event": 1.5,
+    "context": 1.0,
+}
+
+# Categories eligible for unresolved thread detection
+_THREAD_CATEGORIES = frozenset({"concern", "goal", "context", "event"})
+
+
+def _get_follow_up_type(category: str, days_ago: int) -> str:
+    """Classify how Claude should follow up on an unresolved thread.
+
+    Returns a follow_up_type string indicating the conversational approach:
+    - check_in: Fresh concern, ask directly
+    - gentle_ask: Moderate concern, softer approach
+    - open_ended: Old concern, leave space for user to share
+    - progress: Recent goal, ask about progress
+    - reconnect: Older goal, re-establish relevance
+    - outcome: Recent event, ask what happened
+    - casual: Default for other categories
+    """
+    if category == "concern":
+        if days_ago <= 3:
+            return "check_in"
+        elif days_ago <= 14:
+            return "gentle_ask"
+        else:
+            return "open_ended"
+    elif category == "goal":
+        if days_ago <= 7:
+            return "progress"
+        else:
+            return "reconnect"
+    elif category == "event" and days_ago <= 3:
+        return "outcome"
+    return "casual"
+
+
+async def _get_unresolved_threads(
+    ctx, user_name: str, limit: int = 5
+) -> List[Dict[str, Any]]:
+    """Get priority-scored unresolved threads for a user.
+
+    Queries memories where outcome IS NULL, filters to thread-eligible categories,
+    excludes stale threads (>90 days), computes priority scores, and returns
+    sorted results with follow_up_type classification.
+
+    Priority scoring:
+    - Category weight: concern=3.0, goal=2.0, event=1.5, context=1.0
+    - Recency multiplier: <=7 days=1.5x, 8-30 days=1.0x, 31-90 days=0.5x
+    - Importance multiplier: is_permanent=1.2x
+    """
+    threads = []
+
+    async with ctx.db_manager.get_session() as session:
+        result = await session.execute(
+            select(Memory).where(
+                Memory.user_name == user_name,
+                Memory.outcome.is_(None),
+                or_(Memory.archived == False, Memory.archived.is_(None))
+            ).order_by(Memory.created_at.desc()).limit(30)
+        )
+        for mem in result.scalars().all():
+            cats = mem.categories or []
+
+            # Filter to thread-eligible categories
+            matching = [c for c in cats if c in _THREAD_CATEGORIES]
+            if not matching:
+                continue
+
+            days = _days_ago(mem.created_at)
+
+            # Exclude stale threads (>90 days)
+            if days > 90:
+                continue
+
+            # Pick primary category (highest weight)
+            primary = max(matching, key=lambda c: _CATEGORY_WEIGHTS.get(c, 0))
+
+            # Compute priority score
+            category_weight = _CATEGORY_WEIGHTS.get(primary, 1.0)
+
+            if days <= 7:
+                recency = 1.5
+            elif days <= 30:
+                recency = 1.0
+            else:
+                recency = 0.5
+
+            importance = 1.2 if getattr(mem, "is_permanent", False) else 1.0
+
+            priority = category_weight * recency * importance
+
+            threads.append({
+                "id": mem.id,
+                "summary": _summarize(mem.content),
+                "category": primary,
+                "days_ago": days,
+                "time_ago": _humanize_timedelta(mem.created_at),
+                "priority": round(priority, 2),
+                "follow_up_type": _get_follow_up_type(primary, days),
+            })
+
+    # Sort by priority descending
+    threads.sort(key=lambda t: t["priority"], reverse=True)
+    return threads[:limit]
+
+
+async def _compute_thread_duration(
+    ctx, user_name: str, thread_content: str
+) -> Optional[str]:
+    """Compute how long a recurring theme has been present.
+
+    Searches for related memories via recall, finds the oldest one,
+    and returns a human-readable duration if the topic spans >=7 days
+    with >=2 related memories.
+
+    Returns None if the topic is too new or has too few mentions.
+    """
+    try:
+        result = await ctx.memory_manager.recall(
+            topic=thread_content,
+            limit=5,
+            user_id=ctx.user_id,
+            user_name=user_name,
+        )
+        memories = result.get("memories", [])
+        if len(memories) < 2:
+            return None
+
+        # Find oldest created_at
+        oldest = None
+        for m in memories:
+            created = m.get("created_at")
+            if created is None:
+                continue
+            if isinstance(created, str):
+                try:
+                    created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    continue
+            if isinstance(created, datetime):
+                if oldest is None or created < oldest:
+                    oldest = created
+
+        if oldest is None:
+            return None
+
+        days = _days_ago(oldest)
+        if days >= 7:
+            return _humanize_timedelta(oldest)
+        return None
+    except Exception:
+        return None
+
+
+def _build_thread_surfacing_guidance(
+    unresolved_threads: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Build mid-conversation guidance for lower-priority threads.
+
+    Skips the first 2 threads (those go in greeting_guidance) and generates
+    guidance for threads 3-5, telling Claude to look for natural moments
+    to follow up on them during conversation.
+
+    Returns None if there are 2 or fewer threads.
+    """
+    remaining = unresolved_threads[2:]
+    if not remaining:
+        return None
+
+    # Limit to 3 additional threads
+    remaining = remaining[:3]
+
+    guidance = (
+        "During this conversation, look for natural moments to follow up on "
+        "these additional threads. Don't force these -- wait for a relevant "
+        "moment or natural pause.\n\n"
+    )
+
+    for thread in remaining:
+        follow_up = thread.get("follow_up_type", "casual")
+        guidance += (
+            f"- {thread['summary']} ({thread['time_ago']}) "
+            f"[approach: {follow_up}]\n"
+        )
+
+    guidance += (
+        "\nIf the user says something is resolved, call "
+        "daem0n_reflect(action='outcome') to record it."
+    )
+
+    return guidance
 
 
 @mcp.tool(version=__version__)
@@ -306,28 +505,10 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         user_summary = "; ".join(facts)
         memory_ids.extend([m["id"] for m in fact_memories])
 
-    # 3. Unresolved threads: concerns and goals without outcomes
-    unresolved_threads = []
-    async with ctx.db_manager.get_session() as session:
-        result = await session.execute(
-            select(Memory).where(
-                Memory.user_name == user_name,
-                Memory.outcome.is_(None),
-                or_(Memory.archived == False, Memory.archived.is_(None))
-            ).order_by(Memory.created_at.desc()).limit(20)
-        )
-        for mem in result.scalars().all():
-            cats = mem.categories or []
-            if "concern" in cats or "goal" in cats:
-                unresolved_threads.append({
-                    "id": mem.id, "summary": _summarize(mem.content),
-                    "category": "concern" if "concern" in cats else "goal",
-                    "days_ago": _days_ago(mem.created_at),
-                    "time_ago": _humanize_timedelta(mem.created_at),
-                })
-                memory_ids.append(mem.id)
-                if len(unresolved_threads) >= 3:
-                    break
+    # 3. Unresolved threads: priority-scored with follow-up types
+    unresolved_threads = await _get_unresolved_threads(ctx, user_name)
+    for thread in unresolved_threads:
+        memory_ids.append(thread["id"])
 
     # 4. Recent topics: most recent memories of any category
     recent_topics = []
@@ -430,5 +611,23 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         emotional_context=emotional_context,
         active_routines=active_routines,
     )
+
+    # Enrich top 2 threads with recurring_since duration
+    if len(unresolved_threads) >= 1:
+        top_threads = unresolved_threads[:2]
+        durations = await asyncio.gather(
+            *[
+                _compute_thread_duration(ctx, user_name, t["summary"])
+                for t in top_threads
+            ]
+        )
+        for i, duration in enumerate(durations):
+            if duration is not None:
+                unresolved_threads[i]["recurring_since"] = duration
+
+    # Build thread surfacing guidance for mid-conversation follow-up
+    surfacing = _build_thread_surfacing_guidance(unresolved_threads)
+    if surfacing is not None:
+        response["thread_surfacing_guidance"] = surfacing
 
     return response

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 4 complete. Ready for Phase 5.
+**Current focus:** Phase 5 in progress. Plan 05-01 complete, Plan 05-02 next.
 
 ## Current Position
 
-Phase: 4 of 9 (Auto-Detection & Memory Decay)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 04-02-PLAN.md
+Phase: 5 of 9 (Session Experience)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-08 -- Completed 05-01-PLAN.md
 
-Progress: [########################] ~37% (10/27 plans)
+Progress: [###########################] ~41% (11/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: ~9 minutes
-- Total execution time: 1.5 hours
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [########################] ~37% (10/27 plans)
 | 02 | 3/3 | 28min | 9min |
 | 03 | 2/2 | 7min | 3.5min |
 | 04 | 2/2 | 8min | 4min |
+| 05 | 1/2 | 7min | 7min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (3min), 03-02 (4min), 04-01 (4min), 04-02 (4min)
-- Trend: Consistent ~4min for well-defined plans
+- Last 5 plans: 03-02 (4min), 04-01 (4min), 04-02 (4min), 05-01 (7min)
+- Trend: Slight increase for enrichment tasks with more test coverage
 
 *Updated after each plan completion*
 
@@ -87,6 +88,10 @@ Recent decisions affecting current work:
 - [04-02]: ctx obtained early and reused for both duplicate check and remember call
 - [04-02]: Explicit remember (without 'auto' tag) bypasses all auto-detection validation
 - [04-02]: Auto-detection guidance added to all three briefing paths (new device, unnamed user, returning user)
+- [05-01]: time_ago supplements days_ago (both kept) -- days_ago used for numeric comparison in Plan 05-02
+- [05-01]: identity_hint reduced to identity correction only -- greeting moved to greeting_guidance
+- [05-01]: Greeting guidance picks max 2 items: concerns > emotions > goals > topics priority
+- [05-01]: No external dependencies for temporal formatting -- stdlib datetime only
 
 ### Pending Todos
 
@@ -102,9 +107,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 03:05 UTC
-Stopped at: Completed 04-02-PLAN.md (Phase 04 complete)
-Resume file: .planning/phases/05-personality-tone/05-RESEARCH.md (next phase)
+Last session: 2026-02-08 04:17 UTC
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-session-experience/05-02-PLAN.md
 
 ## Phase 01 Summary
 
@@ -131,3 +136,8 @@ Phase 03 (Explicit Memory Capture & Control) is complete:
 Phase 04 (Auto-Detection & Memory Decay) is complete:
 - 04-01: Fixed per-category decay bug, created auto_detect.py with noise filter/confidence routing, added 31 tests
 - 04-02: Integrated auto-detection validation into daem0n_remember, added briefing guidance, added 8 tests
+
+## Phase 05 Summary (in progress)
+
+Phase 05 (Session Experience) is in progress:
+- 05-01: Created temporal.py utility, enriched briefing with greeting_guidance and time_ago, enriched recall with time_ago, 11 new tests
