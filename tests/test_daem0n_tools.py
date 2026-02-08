@@ -239,6 +239,227 @@ class TestDaem0nForget:
             assert result["deleted"] is False
             assert "Bob" in result["error"]
 
+    @pytest.mark.asyncio
+    async def test_forget_query_returns_candidates(self):
+        """Query mode searches semantically and returns candidates without deleting."""
+        with patch("daem0nmcp.tools.daem0n_forget.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+
+            # Mock recall to return 2 matching memories
+            ctx.memory_manager.recall = AsyncMock(return_value={
+                "memories": [
+                    {
+                        "id": 10,
+                        "content": "User's sister is named Sarah",
+                        "categories": ["relationship"],
+                        "created_at": "2026-02-07T12:00:00",
+                    },
+                    {
+                        "id": 11,
+                        "content": "User's sister lives in Portland",
+                        "categories": ["fact"],
+                        "created_at": "2026-02-07T13:00:00",
+                    },
+                ],
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(query="sister", user_id="/test/user")
+
+            assert result["type"] == "forget_candidates"
+            assert result["query"] == "sister"
+            assert len(result["candidates"]) == 2
+            assert result["candidates"][0]["id"] == 10
+            assert result["candidates"][0]["content"] == "User's sister is named Sarah"
+            assert result["candidates"][1]["id"] == 11
+            assert result["count"] == 2
+
+            # Verify recall was called with correct params
+            ctx.memory_manager.recall.assert_called_once_with(
+                topic="sister",
+                limit=10,
+                user_id="/test/user",
+                user_name="default",
+            )
+
+    @pytest.mark.asyncio
+    async def test_forget_confirm_ids_batch_delete(self):
+        """Batch delete removes multiple memories and cleans up all storage layers."""
+        with patch("daem0nmcp.tools.daem0n_forget.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_forget.get_recall_cache") as mock_cache_fn:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager._qdrant = MagicMock()
+            ctx.memory_manager._index = MagicMock()
+
+            mock_cache = MagicMock()
+            mock_cache_fn.return_value = mock_cache
+
+            # Mock session: both IDs exist for this user
+            mock_session = MagicMock()
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+                # Odd calls are selects (return memory), even calls are deletes
+                if call_count["n"] % 2 == 1:
+                    mock_mem = MagicMock(spec=Memory)
+                    mock_mem.id = [1, 2][(call_count["n"] - 1) // 2]
+                    mock_mem.user_name = "default"
+                    result.scalar_one_or_none.return_value = mock_mem
+                return result
+
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(confirm_ids=[1, 2], user_id="/test/user")
+
+            assert result["type"] == "batch_deleted"
+            assert result["deleted_ids"] == [1, 2]
+            assert result["failed_ids"] == []
+            assert result["deleted_count"] == 2
+
+            # Verify storage cleanup
+            assert ctx.memory_manager._qdrant.delete_memory.call_count == 2
+            assert ctx.memory_manager._index.remove_document.call_count == 2
+            ctx.memory_manager.invalidate_graph_cache.assert_called_once()
+            mock_cache.clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_forget_confirm_ids_partial_failure(self):
+        """Batch delete with some IDs not found reports partial failure."""
+        with patch("daem0nmcp.tools.daem0n_forget.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_forget.get_recall_cache") as mock_cache_fn:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager._qdrant = None
+            ctx.memory_manager._index = None
+
+            mock_cache = MagicMock()
+            mock_cache_fn.return_value = mock_cache
+
+            # Mock session: ID 1 exists, ID 999 does not
+            mock_session = MagicMock()
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+                if call_count["n"] == 1:
+                    # Select for ID 1 -> found
+                    mock_mem = MagicMock(spec=Memory)
+                    mock_mem.id = 1
+                    mock_mem.user_name = "default"
+                    result.scalar_one_or_none.return_value = mock_mem
+                elif call_count["n"] == 2:
+                    # Delete for ID 1
+                    pass
+                elif call_count["n"] == 3:
+                    # Select for ID 999 -> not found
+                    result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(confirm_ids=[1, 999], user_id="/test/user")
+
+            assert result["type"] == "batch_deleted"
+            assert result["deleted_ids"] == [1]
+            assert result["failed_ids"] == [999]
+            assert result["deleted_count"] == 1
+            assert result["failed_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_forget_cache_cleared_on_delete(self):
+        """Single ID delete clears the recall cache."""
+        with patch("daem0nmcp.tools.daem0n_forget.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_forget.get_recall_cache") as mock_cache_fn:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager._qdrant = None
+            ctx.memory_manager._index = None
+
+            mock_cache = MagicMock()
+            mock_cache_fn.return_value = mock_cache
+
+            # Mock session: memory exists
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_memory = MagicMock(spec=Memory)
+            mock_memory.id = 1
+            mock_memory.user_name = "default"
+            mock_result.scalar_one_or_none.return_value = mock_memory
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(memory_id=1, user_id="/test/user")
+
+            assert result["deleted"] is True
+            mock_cache.clear.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_forget_no_params_returns_error(self):
+        """Calling with no parameters returns a usage error."""
+        with patch("daem0nmcp.tools.daem0n_forget._default_user_id", "/test/user"):
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(user_id="/test/user")
+
+            assert "error" in result
+            assert "No parameters" in result["error"]
+            assert "usage" in result
+
+    @pytest.mark.asyncio
+    async def test_forget_conflicting_params_returns_error(self):
+        """Calling with multiple modes returns a conflict error."""
+        with patch("daem0nmcp.tools.daem0n_forget._default_user_id", "/test/user"):
+            from daem0nmcp.tools.daem0n_forget import daem0n_forget
+
+            result = await daem0n_forget(
+                memory_id=1,
+                query="test",
+                user_id="/test/user",
+            )
+
+            assert "error" in result
+            assert "one mode" in result["error"].lower()
+
 
 class TestDaem0nBriefing:
     """Tests for daem0n_briefing tool."""
