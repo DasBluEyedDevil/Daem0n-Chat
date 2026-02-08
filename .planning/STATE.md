@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 5 in progress. Plan 05-01 complete, Plan 05-02 next.
+**Current focus:** Phase 5 complete. Ready for Phase 6.
 
 ## Current Position
 
 Phase: 5 of 9 (Session Experience)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-08 -- Completed 05-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-08 -- Completed 05-02-PLAN.md
 
-Progress: [###########################] ~41% (11/27 plans)
+Progress: [#############################] ~44% (12/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: ~9 minutes
-- Total execution time: 1.6 hours
+- Total plans completed: 12
+- Average duration: ~8 minutes
+- Total execution time: 1.7 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [###########################] ~41% (11/27 plans)
 | 02 | 3/3 | 28min | 9min |
 | 03 | 2/2 | 7min | 3.5min |
 | 04 | 2/2 | 8min | 4min |
-| 05 | 1/2 | 7min | 7min |
+| 05 | 2/2 | 11min | 5.5min |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (4min), 04-01 (4min), 04-02 (4min), 05-01 (7min)
-- Trend: Slight increase for enrichment tasks with more test coverage
+- Last 5 plans: 04-01 (4min), 04-02 (4min), 05-01 (7min), 05-02 (4min)
+- Trend: Consistent fast execution, averaging under 6 minutes
 
 *Updated after each plan completion*
 
@@ -92,6 +92,11 @@ Recent decisions affecting current work:
 - [05-01]: identity_hint reduced to identity correction only -- greeting moved to greeting_guidance
 - [05-01]: Greeting guidance picks max 2 items: concerns > emotions > goals > topics priority
 - [05-01]: No external dependencies for temporal formatting -- stdlib datetime only
+- [05-02]: Category weights: concern=3.0, goal=2.0, event=1.5, context=1.0 -- concerns always prioritized
+- [05-02]: Recency multipliers: <=7d=1.5x, 8-30d=1.0x, 31-90d=0.5x -- fresh threads rank higher
+- [05-02]: 90-day staleness cutoff -- threads older than 90 days are assumed silently resolved
+- [05-02]: Duration enrichment runs only on top 2 threads via asyncio.gather to limit latency
+- [05-02]: Follow-up type classification gives Claude HOW to bring things up, not just WHAT
 
 ### Pending Todos
 
@@ -107,9 +112,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 04:17 UTC
-Stopped at: Completed 05-01-PLAN.md
-Resume file: .planning/phases/05-session-experience/05-02-PLAN.md
+Last session: 2026-02-08 04:25 UTC
+Stopped at: Completed 05-02-PLAN.md (Phase 05 complete)
+Resume file: .planning/phases/06-conversation-flow/06-RESEARCH.md
 
 ## Phase 01 Summary
 
@@ -137,7 +142,8 @@ Phase 04 (Auto-Detection & Memory Decay) is complete:
 - 04-01: Fixed per-category decay bug, created auto_detect.py with noise filter/confidence routing, added 31 tests
 - 04-02: Integrated auto-detection validation into daem0n_remember, added briefing guidance, added 8 tests
 
-## Phase 05 Summary (in progress)
+## Phase 05 Summary
 
-Phase 05 (Session Experience) is in progress:
+Phase 05 (Session Experience) is complete:
 - 05-01: Created temporal.py utility, enriched briefing with greeting_guidance and time_ago, enriched recall with time_ago, 11 new tests
+- 05-02: Priority-scored thread detection with follow-up types, 90-day staleness cutoff, recurring_since duration, mid-conversation surfacing guidance, 12 new tests
