@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 5 complete. Ready for Phase 6.
+**Current focus:** Phase 6 in progress. Emotion detection complete, conversation flow next.
 
 ## Current Position
 
-Phase: 5 of 9 (Session Experience)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 05-02-PLAN.md
+Phase: 6 of 9 (Conversation Intelligence)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-08 -- Completed 06-01-PLAN.md
 
-Progress: [#############################] ~44% (12/27 plans)
+Progress: [█████████████████████████████░░░░░░░░░░░░░░░░░░░░] ~48% (13/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: ~8 minutes
-- Total execution time: 1.7 hours
+- Total execution time: 1.8 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [#############################] ~44% (12/27 plans)
 | 03 | 2/2 | 7min | 3.5min |
 | 04 | 2/2 | 8min | 4min |
 | 05 | 2/2 | 11min | 5.5min |
+| 06 | 1/2 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (4min), 04-02 (4min), 05-01 (7min), 05-02 (4min)
-- Trend: Consistent fast execution, averaging under 6 minutes
+- Last 5 plans: 04-02 (4min), 05-01 (7min), 05-02 (4min), 06-01 (4min)
+- Trend: Consistent fast execution, averaging under 5 minutes
 
 *Updated after each plan completion*
 
@@ -97,6 +98,11 @@ Recent decisions affecting current work:
 - [05-02]: 90-day staleness cutoff -- threads older than 90 days are assumed silently resolved
 - [05-02]: Duration enrichment runs only on top 2 threads via asyncio.gather to limit latency
 - [05-02]: Follow-up type classification gives Claude HOW to bring things up, not just WHAT
+- [06-01]: Three-tier detection priority: explicit (0.95) > emphasis (0.65-0.85) > topic (0.60)
+- [06-01]: 50+ common acronyms excluded from emphasis detection to avoid false positives
+- [06-01]: Enrichment runs on ALL memories (explicit + auto-detected), not just auto
+- [06-01]: Enrichment adds to categories list (not replaces) and appends to tags
+- [06-01]: 0.60 confidence threshold for enrichment activation
 
 ### Pending Todos
 
@@ -112,9 +118,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 04:25 UTC
-Stopped at: Completed 05-02-PLAN.md (Phase 05 complete)
-Resume file: .planning/phases/06-conversation-flow/06-RESEARCH.md
+Last session: 2026-02-08 04:58 UTC
+Stopped at: Completed 06-01-PLAN.md (Phase 06 in progress)
+Resume file: .planning/phases/06-conversation-intelligence/06-02-PLAN.md
 
 ## Phase 01 Summary
 
@@ -147,3 +153,8 @@ Phase 04 (Auto-Detection & Memory Decay) is complete:
 Phase 05 (Session Experience) is complete:
 - 05-01: Created temporal.py utility, enriched briefing with greeting_guidance and time_ago, enriched recall with time_ago, 11 new tests
 - 05-02: Priority-scored thread detection with follow-up types, 90-day staleness cutoff, recurring_since duration, mid-conversation surfacing guidance, 12 new tests
+
+## Phase 06 Summary (In Progress)
+
+Phase 06 (Conversation Intelligence) in progress:
+- 06-01: Rule-based emotion detection (explicit/emphasis/topic) with memory enrichment pipeline, 13 new tests

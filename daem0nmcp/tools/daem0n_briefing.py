@@ -56,6 +56,17 @@ _CATEGORY_WEIGHTS = {
 # Categories eligible for unresolved thread detection
 _THREAD_CATEGORIES = frozenset({"concern", "goal", "context", "event"})
 
+# Session boundary detection: gaps larger than this indicate separate sessions
+SESSION_GAP_HOURS = 2
+
+# Negative emotional tones that trigger gentle greeting guidance
+_NEGATIVE_TONES = frozenset({
+    "stressed", "anxious", "worried", "frustrated", "angry", "upset",
+    "depressed", "overwhelmed", "scared", "nervous", "disappointed",
+    "exhausted", "furious", "miserable", "devastated", "annoyed",
+    "irritated", "distressed",
+})
+
 
 def _get_follow_up_type(category: str, days_ago: int) -> str:
     """Classify how Claude should follow up on an unresolved thread.
@@ -243,6 +254,133 @@ def _build_thread_surfacing_guidance(
     return guidance
 
 
+async def _build_previous_session_summary(
+    ctx, user_name: str
+) -> Optional[Dict[str, Any]]:
+    """Generate a concise summary of the user's previous conversation session.
+
+    Uses a 2-hour time-gap heuristic to detect session boundaries among
+    stored memories. Returns topics discussed, emotional tone, and unresolved
+    threads from the previous session.
+
+    Returns None if the previous session has fewer than 2 memories.
+    """
+    # 1. Query recent memories (most recent 30, not archived)
+    async with ctx.db_manager.get_session() as session:
+        result = await session.execute(
+            select(Memory).where(
+                Memory.user_name == user_name,
+                or_(Memory.archived == False, Memory.archived.is_(None))
+            ).order_by(Memory.created_at.desc()).limit(30)
+        )
+        all_memories = result.scalars().all()
+
+    if not all_memories:
+        return None
+
+    # 2. Session boundary detection using time-gap heuristic
+    # Memories are ordered desc (newest first). Walk through and cluster.
+    gap_threshold = timedelta(hours=SESSION_GAP_HOURS)
+    sessions: List[List] = [[all_memories[0]]]
+
+    for i in range(1, len(all_memories)):
+        current = all_memories[i]
+        previous = all_memories[i - 1]
+
+        current_dt = current.created_at
+        previous_dt = previous.created_at
+        if current_dt.tzinfo is None:
+            current_dt = current_dt.replace(tzinfo=timezone.utc)
+        if previous_dt.tzinfo is None:
+            previous_dt = previous_dt.replace(tzinfo=timezone.utc)
+
+        # Since memories are desc, previous_dt >= current_dt
+        # A gap means previous_dt - current_dt > threshold
+        if previous_dt - current_dt > gap_threshold:
+            sessions.append([current])
+        else:
+            sessions[-1].append(current)
+
+    # 3. Select previous session
+    # sessions[0] is the most recent cluster (the previous session,
+    # since briefing runs at conversation start before new memories exist)
+    prev_session = sessions[0]
+
+    # Return None if too few memories
+    if len(prev_session) < 2:
+        return None
+
+    # 4. Extract topics (max 5, deduplicated)
+    topics = []
+    seen = set()
+    for mem in prev_session:
+        summary = _summarize(mem.content, 60)
+        summary_lower = summary.lower()
+        if summary_lower not in seen:
+            seen.add(summary_lower)
+            topics.append(summary)
+            if len(topics) >= 5:
+                break
+
+    # 5. Determine emotional tone from emotion-tagged memories
+    emotional_tone = None
+    for mem in prev_session:
+        cats = mem.categories or []
+        if "emotion" in cats:
+            # Check tags for "emotion:{label}" pattern
+            for tag in (mem.tags or []):
+                if tag.startswith("emotion:"):
+                    emotional_tone = tag.split(":", 1)[1]
+                    break
+            if emotional_tone:
+                break
+
+    # 6. Identify unresolved threads from that session
+    unresolved = []
+    for mem in prev_session:
+        cats = mem.categories or []
+        has_thread_cat = any(c in ("concern", "goal") for c in cats)
+        if has_thread_cat and mem.outcome is None:
+            unresolved.append(_summarize(mem.content, 60))
+            if len(unresolved) >= 3:
+                break
+
+    # 7. Build summary text (1-3 sentences)
+    summary_parts = []
+
+    if topics:
+        if len(topics) == 1:
+            summary_parts.append(f"You talked about {topics[0]}")
+        elif len(topics) == 2:
+            summary_parts.append(f"You discussed {topics[0]} and {topics[1]}")
+        else:
+            listed = ", ".join(topics[:-1]) + f", and {topics[-1]}"
+            summary_parts.append(f"You discussed {listed}")
+
+    if emotional_tone:
+        summary_parts.append(f"Emotional tone: {emotional_tone}")
+
+    if unresolved:
+        summary_parts.append("Left unresolved: " + "; ".join(unresolved))
+
+    if not summary_parts:
+        return None
+
+    # Ensure the first memory has a valid created_at for session_time
+    session_dt = prev_session[0].created_at
+    if session_dt.tzinfo is None:
+        session_dt = session_dt.replace(tzinfo=timezone.utc)
+
+    return {
+        "summary": ". ".join(summary_parts) + ".",
+        "topics": topics[:5],
+        "emotional_tone": emotional_tone,
+        "unresolved_from_session": unresolved[:3],
+        "session_time": _humanize_timedelta(session_dt),
+        "memory_count": len(prev_session),
+    }
+
+
 @mcp.tool(version=__version__)
 @with_request_id
 async def daem0n_briefing(
@@ -386,6 +524,7 @@ def _build_greeting_guidance(
     recent_topics: list,
     emotional_context: Optional[str],
     active_routines: list,
+    previous_session_tone: Optional[str] = None,
 ) -> str:
     """Generate natural greeting guidance for Claude.
 
@@ -396,9 +535,23 @@ def _build_greeting_guidance(
     4. Recent topics
     5. Active routines (for day-of-week relevance)
 
+    If previous_session_tone indicates negative emotion, prepends
+    tone-aware guidance for a gentler greeting approach.
+
     Returns guidance text for Claude, NOT the greeting itself.
     Claude should compose the actual greeting.
     """
+    tone_prefix = ""
+    if (
+        previous_session_tone
+        and previous_session_tone.lower() in _NEGATIVE_TONES
+    ):
+        tone_prefix = (
+            f"The user's last conversation had a {previous_session_tone} tone. "
+            "Be warm and gentle in your greeting -- don't directly reference "
+            "their emotions unless they bring it up.\n\n"
+        )
+
     items_to_reference = []
 
     # Priority 1: Fresh concerns (worry follow-up)
@@ -438,7 +591,7 @@ def _build_greeting_guidance(
     name = greeting_name or "the user"
 
     if not items_to_reference:
-        return (
+        return tone_prefix + (
             f"Greet {name} warmly. You don't have specific recent context to reference, "
             f"so keep it simple and natural."
         )
@@ -460,7 +613,7 @@ def _build_greeting_guidance(
         '- "Good to see you again! Still working on that marathon training?"\n'
     )
 
-    return guidance
+    return tone_prefix + guidance
 
 
 async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
@@ -561,6 +714,9 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         if mem["id"] not in memory_ids:
             memory_ids.append(mem["id"])
 
+    # 6b. Previous session summary
+    previous_session_summary = await _build_previous_session_summary(ctx, user_name)
+
     # Build response
     response: Dict[str, Any] = {
         "type": "briefing",
@@ -580,6 +736,9 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
 
     if active_routines:
         response["active_routines"] = active_routines[:3]
+
+    if previous_session_summary:
+        response["previous_session_summary"] = previous_session_summary
 
     response["auto_detection_guidance"] = (
         "Throughout this conversation, watch for personal information the user "
@@ -610,6 +769,10 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         recent_topics=recent_topics,
         emotional_context=emotional_context,
         active_routines=active_routines,
+        previous_session_tone=(
+            previous_session_summary.get("emotional_tone")
+            if previous_session_summary else None
+        ),
     )
 
     # Enrich top 2 threads with recurring_since duration
