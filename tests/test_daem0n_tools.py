@@ -1232,6 +1232,237 @@ class TestDaem0nReflect:
             assert "error" in result
 
 
+class TestAutoDetection:
+    """Tests for auto-detection validation in daem0n_remember."""
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_rejects_greeting(self):
+        """Auto-detected greeting is rejected by noise filter."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={"id": 1})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="hello how are you",
+                categories="fact",
+                tags=["auto"],
+                confidence=0.95,
+                user_id="/test/user",
+            )
+
+            assert result["status"] == "skipped"
+            assert result["reason"] == "noise_filter"
+            ctx.memory_manager.remember.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_rejects_short_content(self):
+        """Auto-detected short content is rejected."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={"id": 1})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="dogs",
+                categories="fact",
+                tags=["auto"],
+                confidence=0.95,
+                user_id="/test/user",
+            )
+
+            assert result["status"] == "skipped"
+            assert result["reason"] in ("too_short", "too_few_words")
+            ctx.memory_manager.remember.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_high_confidence_stores(self):
+        """High confidence auto-detection stores memory."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 1,
+                "content": "User's sister Sarah lives in Portland Oregon area",
+                "categories": ["relationship"],
+            })
+            # Mock recall to return no duplicates
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="User's sister Sarah lives in Portland Oregon area",
+                categories="relationship",
+                tags=["auto"],
+                confidence=0.98,
+                user_id="/test/user",
+            )
+
+            # Should have stored the memory
+            ctx.memory_manager.remember.assert_called_once()
+            assert result["id"] == 1
+            assert "status" not in result or result.get("status") != "skipped"
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_medium_confidence_suggests(self):
+        """Medium confidence auto-detection suggests instead of storing."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={"id": 1})
+            # Mock recall to return no duplicates
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="User mentioned going to the gym regularly these days",
+                categories="routine",
+                tags=["auto"],
+                confidence=0.80,
+                user_id="/test/user",
+            )
+
+            assert result["status"] == "suggested"
+            assert result["confidence"] == 0.80
+            ctx.memory_manager.remember.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_low_confidence_skips(self):
+        """Low confidence auto-detection skips memory."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={"id": 1})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="User might have some interest in painting or drawing",
+                categories="interest",
+                tags=["auto"],
+                confidence=0.40,
+                user_id="/test/user",
+            )
+
+            assert result["status"] == "skipped"
+            assert result["reason"] == "low_confidence"
+            ctx.memory_manager.remember.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_remember_skips_duplicate(self):
+        """Auto-detection skips duplicate memories."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={"id": 1})
+            # Mock recall to return existing similar memory
+            ctx.memory_manager.recall = AsyncMock(return_value={
+                "memories": [
+                    {"id": 99, "content": "User's sister is Sarah", "semantic_match": 0.90}
+                ]
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="User's sister is named Sarah",
+                categories="relationship",
+                tags=["auto"],
+                confidence=0.96,
+                user_id="/test/user",
+            )
+
+            assert result["status"] == "skipped"
+            assert result["reason"] == "duplicate"
+            assert result["existing_memory_id"] == 99
+            ctx.memory_manager.remember.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_explicit_remember_bypasses_auto_validation(self):
+        """Explicit remember (without auto tag) bypasses all auto-detection validation."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 1,
+                "content": "My favorite color is blue",
+                "categories": ["preference"],
+            })
+
+            # Mock db session for is_permanent
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="My favorite color is blue",
+                categories="preference",
+                tags=["explicit"],
+                is_permanent=True,
+                user_id="/test/user",
+            )
+
+            # Should have stored the memory directly (no skipped/suggested status)
+            ctx.memory_manager.remember.assert_called_once()
+            assert result["id"] == 1
+            # recall should NOT have been called (no duplicate check for explicit)
+            ctx.memory_manager.recall.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_briefing_includes_auto_detection_guidance(self):
+        """Briefing response includes auto_detection_guidance key."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Mock session for memory count (returns 0 = new device)
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalar.return_value = 0
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert "auto_detection_guidance" in result
+            assert "tags=['auto']" in result["auto_detection_guidance"]
+
+
 class TestRememberScopedToUser:
     """Tests for cross-user memory isolation."""
 
