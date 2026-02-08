@@ -2052,3 +2052,175 @@ class TestThreadDetection:
             guidance = result["thread_surfacing_guidance"]
             assert "natural" in guidance.lower()
             assert "daem0n_reflect" in guidance
+
+
+class TestEmotionDetection:
+    """Tests for emotion detection and enrichment pipeline."""
+
+    # --- Pure function tests (1-10) ---
+
+    def test_detect_explicit_positive(self):
+        """'I'm so excited about the trip' -> explicit positive."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("I'm so excited about the trip")
+        assert r is not None
+        assert r["emotion_label"] == "excited"
+        assert r["valence"] == "positive"
+        assert r["source"] == "explicit"
+        assert r["confidence"] == 0.95
+
+    def test_detect_explicit_negative(self):
+        """'I feel really anxious about the test' -> explicit negative."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("I feel really anxious about the test")
+        assert r is not None
+        assert r["emotion_label"] == "anxious"
+        assert r["valence"] == "negative"
+        assert r["source"] == "explicit"
+        assert r["confidence"] == 0.95
+
+    def test_detect_explicit_i_am_form(self):
+        """'I am stressed about deadlines' -> explicit detection."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("I am stressed about deadlines")
+        assert r is not None
+        assert r["emotion_label"] == "stressed"
+
+    def test_detect_emphasis_caps_and_exclaim(self):
+        """'WHY IS THIS HAPPENING!!' -> emphasis with caps + exclaim."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("WHY IS THIS HAPPENING!!")
+        assert r is not None
+        assert r["source"] == "emphasis"
+        assert r["confidence"] == 0.85
+        assert r["valence"] == "negative"
+
+    def test_detect_emphasis_multiple_caps(self):
+        """'STOP DOING THAT please' -> emphasis from multiple caps words."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("STOP DOING THAT please")
+        assert r is not None
+        assert r["source"] == "emphasis"
+        assert r["confidence"] == 0.70
+
+    def test_detect_emphasis_exclaim_only(self):
+        """'This is amazing!!!' -> emphasis from triple exclamation."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("This is amazing!!!")
+        assert r is not None
+        assert r["source"] == "emphasis"
+        assert r["confidence"] == 0.65
+
+    def test_detect_topic_heavy(self):
+        """'Dealing with the divorce paperwork' -> topic negative."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("Dealing with the divorce paperwork")
+        assert r is not None
+        assert r["source"] == "topic"
+        assert r["valence"] == "negative"
+        assert r["emotion_label"] == "distressed"
+
+    def test_detect_topic_positive(self):
+        """'Just got the promotion at work' -> topic positive."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("Just got the promotion at work")
+        assert r is not None
+        assert r["source"] == "topic"
+        assert r["valence"] == "positive"
+
+    def test_acronym_not_flagged(self):
+        """'Working with the API and SQL database' -> None (acronyms filtered)."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("Working with the API and SQL database")
+        assert r is None
+
+    def test_no_emotion_neutral_content(self):
+        """'My cat's name is Whiskers' -> None."""
+        from daem0nmcp.emotion_detect import detect_emotion
+        r = detect_emotion("My cat's name is Whiskers")
+        assert r is None
+
+    # --- Enrichment integration tests (11-13) ---
+
+    @pytest.mark.asyncio
+    async def test_enrichment_adds_emotion_category(self):
+        """Emotionally-charged content gets 'emotion' added to categories and tags."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 1,
+                "categories": ["fact", "emotion"],
+                "content": "I'm stressed about the move",
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="I'm stressed about the move",
+                categories="fact",
+                user_id="/test/user",
+            )
+
+            # Verify remember was called with enriched categories and tags
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert "emotion" in call_kwargs["categories"]
+            assert "emotion:stressed" in call_kwargs["tags"]
+            assert "valence:negative" in call_kwargs["tags"]
+
+    @pytest.mark.asyncio
+    async def test_enrichment_skips_neutral_content(self):
+        """Neutral content does NOT get 'emotion' added to categories."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 2,
+                "categories": ["fact"],
+                "content": "User lives in Portland",
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="User lives in Portland",
+                categories="fact",
+                user_id="/test/user",
+            )
+
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert "emotion" not in call_kwargs["categories"]
+            # No emotion tags should be present
+            assert not any(t.startswith("emotion:") for t in call_kwargs["tags"])
+            assert not any(t.startswith("valence:") for t in call_kwargs["tags"])
+
+    @pytest.mark.asyncio
+    async def test_enrichment_preserves_existing_categories(self):
+        """Enrichment adds 'emotion' alongside existing categories, not replacing."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 3,
+                "categories": ["fact", "emotion"],
+                "content": "I'm so excited about the new job",
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="I'm so excited about the new job",
+                categories=["fact"],
+                user_id="/test/user",
+            )
+
+            call_kwargs = ctx.memory_manager.remember.call_args.kwargs
+            assert "fact" in call_kwargs["categories"]
+            assert "emotion" in call_kwargs["categories"]
+            assert "emotion:excited" in call_kwargs["tags"]

@@ -13,6 +13,7 @@ try:
     )
     from ..logging_config import with_request_id
     from ..models import VALID_CATEGORIES, Memory
+    from ..emotion_detect import detect_emotion
 except ImportError:
     from daem0nmcp.mcp_instance import mcp
     from daem0nmcp import __version__
@@ -22,6 +23,7 @@ except ImportError:
     )
     from daem0nmcp.logging_config import with_request_id
     from daem0nmcp.models import VALID_CATEGORIES, Memory
+    from daem0nmcp.emotion_detect import detect_emotion
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +122,16 @@ async def daem0n_remember(
             }
 
         # High confidence: proceed to storage (fall through to existing logic)
+
+    # Emotion detection enrichment -- runs on ALL memories (explicit + auto-detected)
+    emotion = detect_emotion(content)
+    if emotion and emotion["confidence"] >= 0.60:
+        # Add emotion category if not already present
+        if "emotion" not in categories:
+            categories = list(categories) + ["emotion"]
+        # Add emotion metadata to tags
+        tags.append(f"emotion:{emotion['emotion_label']}")
+        tags.append(f"valence:{emotion['valence']}")
 
     result = await ctx.memory_manager.remember(
         categories=categories,
