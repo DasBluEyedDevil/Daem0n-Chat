@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay ✓ COMPLETE
 - [x] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context ✓ COMPLETE
 - [x] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection ✓ COMPLETE
-- [ ] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall
+- [x] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall ✓ COMPLETE
 - [ ] **Phase 8: Adaptive Personality** - Learn and mirror user communication style over time
 - [ ] **Phase 9: Distribution & Packaging** - One-click installer, auto-configuration, and first-run experience for non-technical users
 
@@ -126,8 +126,8 @@ Plans:
 **Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 07-01-PLAN.md — Schema & extraction: add EntityAlias/EntityRelationship models, migration 19, replace code-entity extraction with personal patterns, alias-aware entity resolution
-- [ ] 07-02-PLAN.md — Multi-hop queries & tool integration: add entity-entity edge loading and relational query traversal to KnowledgeGraph, add query action to daem0n_relate, Claude statement tracking, 10+ tests
+- [x] 07-01-PLAN.md — Schema & extraction: add EntityAlias/EntityRelationship models, migration 19, replace code-entity extraction with personal patterns, alias-aware entity resolution
+- [x] 07-02-PLAN.md — Multi-hop queries & tool integration: add entity-entity edge loading and relational query traversal to KnowledgeGraph, add query action to daem0n_relate, Claude statement tracking, 10+ tests
 
 ### Phase 8: Adaptive Personality
 **Goal**: Claude learns the user's communication style over time and adapts its tone to match -- casual users get casual Claude, formal users get formal Claude
@@ -137,11 +137,11 @@ Plans:
   1. System detects and stores the user's communication style preferences: casual vs formal tone, humor usage, verbosity preference, emoji usage patterns
   2. Claude's responses adapt to mirror the user's patterns over time (a user who writes short casual messages gets short casual replies, not essays)
   3. Style adaptation is gradual and natural -- it does not change abruptly or feel like mimicry
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Style detection & storage: create style_detect.py with four-dimension analysis (formality, verbosity, emoji, expressiveness), EMA-based StyleProfile, wire into daem0n_remember for user-originated content
+- [ ] 08-02-PLAN.md — Briefing guidance & introspect: add style_guidance to briefing for returning users, show style profile in introspect action
 
 ### Phase 9: Distribution & Packaging
 **Goal**: Non-technical Claude Desktop users can install Daem0n-Chat and start using it without any terminal knowledge or manual configuration
@@ -174,6 +174,6 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | 4. Auto-Detection & Memory Decay | 2/2 | ✓ Complete | 2026-02-08 |
 | 5. Session Experience | 2/2 | ✓ Complete | 2026-02-08 |
 | 6. Conversation Intelligence | 2/2 | ✓ Complete | 2026-02-08 |
-| 7. Knowledge Graph Adaptation | 0/2 | Not started | - |
+| 7. Knowledge Graph Adaptation | 2/2 | ✓ Complete | 2026-02-08 |
 | 8. Adaptive Personality | 0/2 | Not started | - |
 | 9. Distribution & Packaging | 0/3 | Not started | - |
