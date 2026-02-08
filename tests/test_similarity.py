@@ -202,6 +202,41 @@ class TestMemoryDecay:
         # Shorter half-life = more decay
         assert weight_short < weight_long
 
+    def test_category_half_lives_defined(self):
+        """CATEGORY_HALF_LIVES should match documented values."""
+        from daem0nmcp.auto_detect import CATEGORY_HALF_LIVES
+        assert CATEGORY_HALF_LIVES['interest'] == 90.0
+        assert CATEGORY_HALF_LIVES['goal'] == 90.0
+        assert CATEGORY_HALF_LIVES['emotion'] == 30.0
+        assert CATEGORY_HALF_LIVES['concern'] == 30.0
+        assert CATEGORY_HALF_LIVES['context'] == 14.0
+
+    def test_slow_decay_category_longer_halflife(self):
+        """90-day half-life should decay much slower than 30-day at 60 days age."""
+        sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
+        # 90-day half-life: at 60 days, roughly 2/3 of half-life, ~0.63 weight
+        weight_90 = calculate_memory_decay(sixty_days_ago, half_life_days=90.0)
+        # 30-day half-life: at 60 days, 2 half-lives, ~0.25 weight
+        weight_30 = calculate_memory_decay(sixty_days_ago, half_life_days=30.0)
+        # 90-day should be significantly higher
+        assert weight_90 > weight_30
+        assert weight_90 > 0.5  # Should still be > 50% after 60 days with 90d half-life
+        assert weight_30 < 0.4  # Should be < 40% after 60 days with 30d half-life
+
+    def test_auto_decay_multiplier_reduces_halflife(self):
+        """AUTO_DECAY_MULTIPLIER should make memories decay faster."""
+        from daem0nmcp.auto_detect import AUTO_DECAY_MULTIPLIER
+        sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
+        # Normal 90-day half-life
+        weight_normal = calculate_memory_decay(sixty_days_ago, half_life_days=90.0)
+        # Auto-detected: 90 * 0.7 = 63-day half-life
+        effective_half_life = 90.0 * AUTO_DECAY_MULTIPLIER
+        weight_auto = calculate_memory_decay(sixty_days_ago, half_life_days=effective_half_life)
+        # Auto-detected should have decayed more (lower weight)
+        assert weight_auto < weight_normal
+        # Verify the multiplier is 0.7
+        assert AUTO_DECAY_MULTIPLIER == 0.7
+
 
 class TestConflictDetection:
     """Test memory conflict detection."""
