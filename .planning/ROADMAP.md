@@ -123,11 +123,11 @@ Plans:
   1. Knowledge graph stores personal entities (people, places, pets, organizations) with relationship types (knows, lives_in, works_at, owns, related_to)
   2. User can ask relational questions like "What do you know about my sister's dog?" and get accurate multi-hop recall
   3. Entity resolution correctly merges references ("Sarah", "my sister", "her") into the same graph node when context supports it
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md — Schema & extraction: add EntityAlias/EntityRelationship models, migration 19, replace code-entity extraction with personal patterns, alias-aware entity resolution
+- [ ] 07-02-PLAN.md — Multi-hop queries & tool integration: add entity-entity edge loading and relational query traversal to KnowledgeGraph, add query action to daem0n_relate, Claude statement tracking, 10+ tests
 
 ### Phase 8: Adaptive Personality
 **Goal**: Claude learns the user's communication style over time and adapts its tone to match -- casual users get casual Claude, formal users get formal Claude
