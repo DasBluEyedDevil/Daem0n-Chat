@@ -13,6 +13,7 @@ try:
     )
     from ..logging_config import with_request_id
     from ..models import Memory
+    from ..temporal import _humanize_timedelta
 except ImportError:
     from daem0nmcp.mcp_instance import mcp
     from daem0nmcp import __version__
@@ -22,6 +23,7 @@ except ImportError:
     )
     from daem0nmcp.logging_config import with_request_id
     from daem0nmcp.models import Memory
+    from daem0nmcp.temporal import _humanize_timedelta
 
 from sqlalchemy import select, func, or_, distinct
 
@@ -157,15 +159,13 @@ async def daem0n_briefing(
 
     if greeting_name:
         briefing["identity_hint"] = (
-            f"Greet user as {greeting_name}. "
             f"If they correct you ('I'm not {greeting_name}'), "
             f"use daem0n_profile(action='switch_user', user_name='...') to switch."
         )
     else:
         briefing["identity_hint"] = (
-            "User has memories but no name stored. "
-            "Greet them warmly and ask their name. "
-            "Use daem0n_profile(action='set_name', name='...') once you learn it."
+            "If you learn the user's name, "
+            "use daem0n_profile(action='set_name', name='...') to store it."
         )
 
     # If multiple users, mention it
@@ -179,6 +179,89 @@ async def daem0n_briefing(
 
     ctx.briefed = True
     return briefing
+
+
+def _build_greeting_guidance(
+    greeting_name: str,
+    unresolved_threads: list,
+    recent_topics: list,
+    emotional_context: Optional[str],
+    active_routines: list,
+) -> str:
+    """Generate natural greeting guidance for Claude.
+
+    Picks 1-2 items to reference naturally. Priority order:
+    1. Urgent unresolved threads (concerns < 7 days old)
+    2. Recent emotional context
+    3. Recent unresolved goals
+    4. Recent topics
+    5. Active routines (for day-of-week relevance)
+
+    Returns guidance text for Claude, NOT the greeting itself.
+    Claude should compose the actual greeting.
+    """
+    items_to_reference = []
+
+    # Priority 1: Fresh concerns (worry follow-up)
+    for thread in unresolved_threads:
+        if thread["category"] == "concern" and thread["days_ago"] <= 7:
+            items_to_reference.append(
+                f"They mentioned being worried about: {thread['summary']} ({thread['time_ago']})"
+            )
+            if len(items_to_reference) >= 2:
+                break
+
+    # Priority 2: Recent emotional context
+    if emotional_context and len(items_to_reference) < 2:
+        items_to_reference.append(
+            f"Recent emotional context: {emotional_context}"
+        )
+
+    # Priority 3: Unresolved goals (progress check-in)
+    if len(items_to_reference) < 2:
+        for thread in unresolved_threads:
+            if thread["category"] == "goal":
+                items_to_reference.append(
+                    f"They've been working on: {thread['summary']} ({thread['time_ago']})"
+                )
+                break
+
+    # Priority 4: Recent topics
+    if len(items_to_reference) < 2:
+        for topic in recent_topics[:2]:
+            items_to_reference.append(
+                f"You recently talked about: {topic['summary']} ({topic['time_ago']})"
+            )
+            if len(items_to_reference) >= 2:
+                break
+
+    # Build guidance
+    name = greeting_name or "the user"
+
+    if not items_to_reference:
+        return (
+            f"Greet {name} warmly. You don't have specific recent context to reference, "
+            f"so keep it simple and natural."
+        )
+
+    guidance = (
+        f"Greet {name} warmly and naturally reference 1-2 of these recent items. "
+        f"DO NOT recite all of them -- pick what feels most natural. "
+        f"DO NOT say 'according to my records' or 'I remember that' -- "
+        f"just weave it in naturally like a friend would.\n\n"
+        f"Available context:\n"
+    )
+    for item in items_to_reference:
+        guidance += f"- {item}\n"
+
+    guidance += (
+        "\nExamples of natural references:\n"
+        '- "Hey Sarah! How did that interview go?"\n'
+        '- "Hi! Last time we talked you were stressed about the move -- how\'s that going?"\n'
+        '- "Good to see you again! Still working on that marathon training?"\n'
+    )
+
+    return guidance
 
 
 async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
@@ -240,6 +323,7 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
                     "id": mem.id, "summary": _summarize(mem.content),
                     "category": "concern" if "concern" in cats else "goal",
                     "days_ago": _days_ago(mem.created_at),
+                    "time_ago": _humanize_timedelta(mem.created_at),
                 })
                 memory_ids.append(mem.id)
                 if len(unresolved_threads) >= 3:
@@ -258,12 +342,14 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
             recent_topics.append({
                 "id": mem.id, "summary": _summarize(mem.content),
                 "days_ago": _days_ago(mem.created_at),
+                "time_ago": _humanize_timedelta(mem.created_at),
             })
             if mem.id not in memory_ids:
                 memory_ids.append(mem.id)
 
     # 5. Emotional context: emotions from last 7 days
     emotional_context = None
+    emotional_time_ago = None
     async with ctx.db_manager.get_session() as session:
         result = await session.execute(
             select(Memory).where(
@@ -275,6 +361,7 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         for mem in result.scalars().all():
             if "emotion" in (mem.categories or []):
                 emotional_context = _summarize(mem.content, 100)
+                emotional_time_ago = _humanize_timedelta(mem.created_at)
                 if mem.id not in memory_ids:
                     memory_ids.append(mem.id)
                 break
@@ -307,6 +394,8 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
 
     if emotional_context:
         response["emotional_context"] = emotional_context
+        if emotional_time_ago:
+            response["emotional_time_ago"] = emotional_time_ago
 
     if active_routines:
         response["active_routines"] = active_routines[:3]
@@ -331,6 +420,15 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         "- MEDIUM (0.70-0.95): User casually mentioned something. Returns suggestion.\n"
         "- LOW (<0.70): Vague or uncertain. Skipped automatically.\n\n"
         "Aim for 1-5 auto-detected memories per conversation. Be selective."
+    )
+
+    # Build greeting guidance from gathered context
+    response["greeting_guidance"] = _build_greeting_guidance(
+        greeting_name=greeting_name,
+        unresolved_threads=unresolved_threads,
+        recent_topics=recent_topics,
+        emotional_context=emotional_context,
+        active_routines=active_routines,
     )
 
     return response
