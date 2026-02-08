@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaemonChat | Personal Memory for Claude Desktop</title>
+    <meta name="description" content="Give Claude Desktop the gift of memory. DaemonChat remembers your name, your people, your preferences, and your feelings across every conversation.">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --blood: #8b0000;
+            --blood-glow: #ff2222;
+            --void: #050508;
+            --abyss: #0d0d14;
+            --shadow: #15151e;
+            --bone: #e8e8e2;
+            --ash: #a0a0a0;
+            --gold: #d4af37;
+            --gold-dim: #9a845a;
+            --glass: rgba(13, 13, 20, 0.7);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--void);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(to bottom, transparent, var(--blood), transparent);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--blood-glow);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Crimson Text', Georgia, serif;
+            background: var(--void);
+            color: var(--bone);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.7;
+        }
+
+        /* Animated background sigils */
+        .sigil-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.04;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' stroke='%238b0000' stroke-width='0.5' fill='none'/%3E%3Ccircle cx='50' cy='50' r='30' stroke='%238b0000' stroke-width='0.3' fill='none'/%3E%3Cpolygon points='50,10 61,40 95,40 68,60 79,90 50,70 21,90 32,60 5,40 39,40' stroke='%238b0000' stroke-width='0.5' fill='none'/%3E%3C/svg%3E");
+            background-size: 600px 600px;
+            animation: drift 100s linear infinite;
+        }
+
+        .sigil-bg-2 {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.02;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' stroke='%238b0000' stroke-width='0.2' fill='none'/%3E%3Cpath d='M20,50 L80,50 M50,20 L50,80' stroke='%238b0000' stroke-width='0.2'/%3E%3Crect x='35' y='35' width='30' height='30' stroke='%238b0000' stroke-width='0.2' fill='none'/%3E%3C/svg%3E");
+            background-size: 800px 800px;
+            animation: drift-reverse 150s linear infinite;
+        }
+
+        @keyframes drift {
+            from { background-position: 0 0; }
+            to { background-position: 600px 600px; }
+        }
+
+        @keyframes drift-reverse {
+            from { background-position: 0 0; }
+            to { background-position: -800px 800px; }
+        }
+
+        /* Vignette overlay */
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            background: radial-gradient(ellipse at center, transparent 0%, var(--void) 100%);
+            animation: breathe 10s ease-in-out infinite;
+        }
+
+        @keyframes breathe {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+
+        .cursor-glow {
+            position: fixed;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle at center, rgba(139, 0, 0, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.5s ease;
+            opacity: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 4rem 0 3rem;
+        }
+
+        .pentacle {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 2rem;
+            animation: pulse-glow 4s ease-in-out infinite, rotate-slow 20s linear infinite;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+
+        .pentacle:hover {
+            transform: scale(1.1) rotate(45deg);
+            filter: drop-shadow(0 0 30px var(--blood-glow)) !important;
+        }
+
+        @keyframes rotate-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { filter: drop-shadow(0 0 10px var(--blood)) drop-shadow(0 0 20px rgba(139, 0, 0, 0.3)); }
+            50% { filter: drop-shadow(0 0 25px var(--blood-glow)) drop-shadow(0 0 50px rgba(255, 34, 34, 0.4)); }
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 3.5rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: var(--bone);
+            text-shadow: 0 0 30px rgba(139, 0, 0, 0.6);
+            margin-bottom: 0.5rem;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: reveal 1s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        }
+
+        @keyframes reveal {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 span {
+            color: var(--blood);
+        }
+
+        .tagline {
+            font-size: 1.3rem;
+            font-style: italic;
+            color: var(--ash);
+            letter-spacing: 0.1em;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: reveal 1s cubic-bezier(0.23, 1, 0.32, 1) 0.3s forwards;
+        }
+
+        /* Decorative divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 3rem 0;
+        }
+
+        .divider-line {
+            height: 1px;
+            width: 200px;
+            background: linear-gradient(90deg, transparent, var(--blood), transparent);
+        }
+
+        /* Main content sections */
+        section {
+            margin-bottom: 4rem;
+        }
+
+        h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.8rem;
+            color: var(--gold);
+            text-align: center;
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.1em;
+        }
+
+        .intro-text {
+            font-size: 1.25rem;
+            text-align: center;
+            max-width: 750px;
+            margin: 0 auto;
+            color: var(--bone);
+            letter-spacing: 0.02em;
+        }
+
+        .reveal-section {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 1s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .reveal-section.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Feature cards */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, var(--abyss) 0%, var(--shadow) 100%);
+            border: 1px solid rgba(139, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 1.75rem;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+            transform: rotate(45deg);
+            transition: 0.6s;
+            pointer-events: none;
+        }
+
+        .feature-card:hover::before {
+            left: 100%;
+            top: 100%;
+        }
+
+        .feature-card:hover {
+            border-color: var(--blood-glow);
+            box-shadow: 0 10px 40px rgba(139, 0, 0, 0.3);
+            transform: translateY(-8px) scale(1.02);
+            background: linear-gradient(135deg, var(--shadow) 0%, var(--abyss) 100%);
+        }
+
+        .feature-card h3 {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            color: var(--gold);
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            font-size: 0.95rem;
+            color: var(--ash);
+        }
+
+        /* Conversation examples */
+        .conversation-block {
+            background: var(--abyss);
+            border: 1px solid rgba(139, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            overflow-x: auto;
+        }
+
+        .conversation-block .line {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .conversation-block .line:last-child {
+            margin-bottom: 0;
+        }
+
+        .conversation-block .you {
+            color: var(--gold);
+            font-style: italic;
+        }
+
+        .conversation-block .claude {
+            color: var(--ash);
+        }
+
+        .conversation-block .label {
+            font-family: 'Cinzel', serif;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            margin-right: 0.5rem;
+        }
+
+        .conversation-block .label-you {
+            color: var(--gold-dim);
+        }
+
+        .conversation-block .label-claude {
+            color: #666;
+        }
+
+        /* Download section */
+        .download-section {
+            background: linear-gradient(180deg, var(--abyss) 0%, rgba(139, 0, 0, 0.15) 50%, var(--abyss) 100%);
+            border: 1px solid rgba(139, 0, 0, 0.4);
+            border-radius: 16px;
+            padding: 4rem 2rem;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(139, 0, 0, 0.1), transparent);
+            animation: scan 8s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { left: -100%; }
+            20%, 100% { left: 200%; }
+        }
+
+        .download-section h2 {
+            margin-bottom: 1rem;
+        }
+
+        .download-section p {
+            color: var(--ash);
+            margin-bottom: 2rem;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.35rem 3.5rem;
+            font-family: 'Cinzel', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            letter-spacing: 0.12em;
+            background: linear-gradient(135deg, var(--blood) 0%, #4a0000 100%);
+            color: var(--bone);
+            border: 1px solid var(--blood-glow);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(139, 0, 0, 0.4);
+            cursor: pointer;
+        }
+
+        .download-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 34, 34, 0.3), transparent);
+            transition: 0.5s;
+        }
+
+        .download-btn:hover::before {
+            left: 100%;
+        }
+
+        .download-btn:hover {
+            background: linear-gradient(135deg, var(--blood-glow) 0%, var(--blood) 100%);
+            box-shadow: 0 0 40px rgba(255, 34, 34, 0.7);
+            transform: translateY(-5px) scale(1.05);
+            color: #fff;
+        }
+
+        .download-icon {
+            font-size: 1.3rem;
+        }
+
+        .download-meta {
+            margin-top: 1.5rem;
+            color: var(--ash);
+            font-size: 0.9rem;
+        }
+
+        .download-meta a {
+            color: var(--gold-dim);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .download-meta a:hover {
+            color: var(--gold);
+        }
+
+        /* Prerequisite note */
+        .prereq-note {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: rgba(212, 175, 55, 0.06);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 8px;
+            text-align: left;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .prereq-note h4 {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .prereq-note p {
+            font-size: 0.85rem;
+            color: var(--ash);
+            margin-bottom: 0;
+        }
+
+        .prereq-note a {
+            color: var(--gold-dim);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .prereq-note a:hover {
+            color: var(--gold);
+        }
+
+        /* Memory types */
+        .memory-types {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 600px) {
+            .memory-types {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .memory-type {
+            padding: 1.25rem;
+            background: var(--abyss);
+            border-radius: 10px;
+            border-left: 4px solid var(--blood);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .memory-type:hover {
+            background: var(--shadow);
+            border-left: 4px solid var(--blood-glow);
+            transform: translateX(10px);
+            box-shadow: -10px 0 20px rgba(139, 0, 0, 0.1);
+        }
+
+        .memory-type h4 {
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            color: var(--gold);
+            margin-bottom: 0.25rem;
+        }
+
+        .memory-type p {
+            font-size: 0.85rem;
+            color: var(--ash);
+        }
+
+        /* Tithe/Donation Section */
+        .tithe-section {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(180deg, var(--void) 0%, rgba(212, 175, 55, 0.08) 50%, var(--void) 100%);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tithe-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .tithe-sigil {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            color: var(--gold);
+            opacity: 0.7;
+            animation: pulse-gold 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-gold {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.05); }
+        }
+
+        .tithe-section h2 {
+            color: var(--gold);
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+        }
+
+        .tithe-text {
+            color: var(--ash);
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 2rem;
+        }
+
+        .tithe-text em {
+            color: var(--gold-dim);
+        }
+
+        .tithe-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.25rem 3rem;
+            font-family: 'Cinzel', serif;
+            font-size: 1.15rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--gold-dim) 0%, #7a6530 100%);
+            color: var(--void);
+            border: 1px solid var(--gold);
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            letter-spacing: 0.1em;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tithe-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .tithe-btn:hover::before {
+            left: 100%;
+        }
+
+        .tithe-btn:hover {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            box-shadow: 0 0 40px rgba(212, 175, 55, 0.6);
+            transform: translateY(-5px) scale(1.05);
+            color: var(--void);
+        }
+
+        .tithe-icon {
+            font-size: 1.4rem;
+        }
+
+        .tithe-subtext {
+            margin-top: 1.5rem;
+            color: var(--ash);
+            font-size: 0.9rem;
+            font-style: italic;
+            opacity: 0.7;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            border-top: 1px solid rgba(139, 0, 0, 0.2);
+            margin-top: 4rem;
+        }
+
+        footer p {
+            color: var(--ash);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--gold-dim);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        footer a:hover {
+            color: var(--gold);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.2rem;
+            }
+
+            .tagline {
+                font-size: 1.1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .download-section {
+                padding: 2rem 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sigil-bg"></div>
+    <div class="sigil-bg-2"></div>
+    <div class="cursor-glow" id="cursorGlow"></div>
+    <div class="vignette"></div>
+
+    <div class="container">
+        <header>
+            <svg class="pentacle" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <!-- Outer circle -->
+                <circle cx="50" cy="50" r="45" stroke="#8b0000" stroke-width="1.5" fill="none"/>
+                <circle cx="50" cy="50" r="42" stroke="#8b0000" stroke-width="0.5" fill="none"/>
+                <!-- Inner circle -->
+                <circle cx="50" cy="50" r="35" stroke="#8b0000" stroke-width="0.5" fill="none"/>
+                <!-- Pentagram -->
+                <polygon
+                    points="50,8 61.8,38.2 95.1,38.2 68.2,56.9 79.4,87.1 50,68.4 20.6,87.1 31.8,56.9 4.9,38.2 38.2,38.2"
+                    stroke="#8b0000"
+                    stroke-width="1.5"
+                    fill="none"
+                />
+                <!-- Center eye -->
+                <ellipse cx="50" cy="48" rx="8" ry="5" stroke="#8b0000" stroke-width="1" fill="none"/>
+                <circle cx="50" cy="48" r="2" fill="#8b0000"/>
+            </svg>
+
+            <h1>DAEM<span>0</span>N CHAT</h1>
+            <p class="tagline">Your Claude Remembers You</p>
+        </header>
+
+        <div class="divider">
+            <div class="divider-line"></div>
+        </div>
+
+        <section class="reveal-section">
+            <p class="intro-text">
+                <strong>DaemonChat</strong> gives Claude Desktop the gift of <em>personal memory</em>.
+                Your name, your family, your feelings, your preferences&mdash;all remembered
+                across every conversation. No more starting from scratch. No more re-introducing yourself.
+                Claude becomes a companion that truly <em>knows</em> you.
+            </p>
+        </section>
+
+        <section class="download-section reveal-section">
+            <h2>Bind the Daem0n</h2>
+            <p>
+                One installer. No Python required. No terminal commands.<br>
+                Download, run, and Claude Desktop will remember you forever.
+            </p>
+            <a href="https://github.com/DasBluEyedDevil/Daem0n-Chat/releases/latest" class="download-btn">
+                <span class="download-icon">&#9047;</span>
+                Download DaemonChat
+            </a>
+            <div class="download-meta">
+                Windows &middot; v1.0.0 &middot; ~217 MB<br>
+                <a href="https://github.com/DasBluEyedDevil/Daem0n-Chat/releases">View all releases</a>
+            </div>
+            <div class="prereq-note">
+                <h4>Requires Claude Desktop</h4>
+                <p>DaemonChat is an MCP server for <a href="https://claude.ai/download" target="_blank" rel="noopener">Claude Desktop</a>. Install Claude Desktop first, then run the DaemonChat installer&mdash;it handles the rest automatically.</p>
+            </div>
+        </section>
+
+        <section class="reveal-section">
+            <h2>What Makes It Special</h2>
+            <div class="features">
+                <div class="feature-card">
+                    <h3>Knows Your Name</h3>
+                    <p>Claude greets you personally at the start of every session, surfacing recent context and picking up where you left off.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Emotional Awareness</h3>
+                    <p>Three-tier emotion recognition detects how you feel&mdash;from explicit statements to subtle emphasis. Claude remembers and responds with care.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Learns Your Style</h3>
+                    <p>Formality, verbosity, emoji usage, expressiveness&mdash;Claude adapts its tone to match yours naturally over time.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Knows Your People</h3>
+                    <p>Say "my sister Sarah" and Claude creates the connection. Ask "what about my sister's dog?" and it traces the knowledge graph to answer.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Just Talk Naturally</h3>
+                    <p>"Remember that I prefer dark mode." "Forget what I said about the deadline." No commands, no syntax&mdash;just conversation.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Picks Up the Thread</h3>
+                    <p>Unresolved topics from past conversations surface automatically. Gentle follow-ups, check-ins, and progress questions&mdash;nothing falls through the cracks.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Completely Private</h3>
+                    <p>Every memory stays on your machine. No cloud sync. No telemetry. No external API calls. Delete anything with "forget that" or just remove the folder.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Multiple Users</h3>
+                    <p>Share a computer? Each person gets their own private memory store. Switch users seamlessly&mdash;complete isolation, zero bleed.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Knowledge Graph</h3>
+                    <p>People, places, pets, and things form a web of connections. Leiden community detection clusters related memories into meaningful themes.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Natural Memory Decay</h3>
+                    <p>Casual mentions fade over time, just like real memory. Important facts persist. Pin critical memories to keep them forever.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Smart Search</h3>
+                    <p>Hybrid BM25 keyword matching and ModernBERT vector embeddings find the memory you need, even when you can't remember the exact words.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>One-Click Install</h3>
+                    <p>The Windows installer bundles everything: Python runtime, AI model, dependencies. No terminal. No configuration. Just run it.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="reveal-section">
+            <h2>How You'll Talk</h2>
+            <p class="intro-text" style="margin-bottom: 1.5rem; font-size: 1.05rem;">
+                No special commands. No syntax to learn. Just talk to Claude like you always do.
+            </p>
+            <div class="conversation-block">
+                <div class="line">
+                    <span class="label label-you">YOU</span>
+                    <span class="you">"Remember that my dog's name is Luna and she's a golden retriever."</span>
+                </div>
+                <div class="line">
+                    <span class="label label-claude">CLAUDE</span>
+                    <span class="claude">Remembered! Luna the golden retriever. I'll keep that in mind.</span>
+                </div>
+            </div>
+            <div class="conversation-block">
+                <div class="line">
+                    <span class="label label-you">YOU</span>
+                    <span class="you">"I'm really stressed about the move next week."</span>
+                </div>
+                <div class="line">
+                    <span class="label label-claude">CLAUDE</span>
+                    <span class="claude">I can tell this is weighing on you. I've noted the move&mdash;I'll check in next time we talk.</span>
+                </div>
+            </div>
+            <div class="conversation-block">
+                <div class="line">
+                    <span class="label label-you">YOU</span>
+                    <span class="you">"What do you know about my family?"</span>
+                </div>
+                <div class="line">
+                    <span class="label label-claude">CLAUDE</span>
+                    <span class="claude">From what you've shared: your sister Sarah lives in Portland, your mom prefers to be called by her first name, and Luna is very much part of the family.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="reveal-section">
+            <h2>What It Remembers</h2>
+            <p class="intro-text" style="margin-bottom: 1rem; font-size: 1rem;">
+                Memories are automatically categorized across ten dimensions&mdash;and can belong to several at once.
+            </p>
+            <div class="memory-types">
+                <div class="memory-type">
+                    <h4>Facts</h4>
+                    <p>Your name, job, location, birthday&mdash;the concrete details of your life. <em>Eternal.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Preferences</h4>
+                    <p>Dark mode, concise answers, no emojis&mdash;how you like things done. <em>Eternal.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Relationships</h4>
+                    <p>People, pets, places&mdash;the connections that matter to you. <em>Eternal.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Emotions</h4>
+                    <p>How you felt about something. Stress, excitement, frustration. <em>Fades gently.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Goals</h4>
+                    <p>What you're working toward. Career moves, fitness, learning. <em>Fades gently.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Concerns</h4>
+                    <p>Worries and anxieties you've shared. The move, the deadline, the health scare. <em>Fades gently.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Milestones</h4>
+                    <p>Achievements and life events. Got the promotion, finished the marathon. <em>Eternal.</em></p>
+                </div>
+                <div class="memory-type">
+                    <h4>Events</h4>
+                    <p>Things happening in your life. The wedding next month, the trip to Japan. <em>Fades gently.</em></p>
+                </div>
+            </div>
+        </section>
+
+        <section class="tithe-section reveal-section">
+            <div class="tithe-sigil">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="1" fill="none"/>
+                    <circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="0.5" fill="none"/>
+                    <path d="M50,12 L50,88 M12,50 L88,50" stroke="currentColor" stroke-width="0.5"/>
+                    <circle cx="50" cy="50" r="8" stroke="currentColor" stroke-width="1" fill="none"/>
+                    <circle cx="50" cy="50" r="3" fill="currentColor"/>
+                </svg>
+            </div>
+            <h2>The Tithe</h2>
+            <p class="tithe-text">
+                The Daem0n asks not for blood, but for <em>sustenance</em>.<br>
+                Those who have benefited from eternal memory may offer tribute,<br>
+                that the darkness may continue to serve.
+            </p>
+            <a href="https://ko-fi.com/vitruvianredux" class="tithe-btn" target="_blank" rel="noopener">
+                <span class="tithe-icon">&#9765;</span>
+                Make an Offering
+            </a>
+            <p class="tithe-subtext">Your sacrifice fuels the eternal vigil.</p>
+        </section>
+
+        <footer>
+            <p>
+                DaemonChat &middot; Personal Memory for Claude Desktop<br>
+                <a href="https://github.com/DasBluEyedDevil/Daem0n-Chat">GitHub Repository</a> &middot;
+                <a href="https://github.com/DasBluEyedDevil/Daem0n-MCP">Daem0n-MCP (for Claude Code)</a>
+            </p>
+            <p style="margin-top: 1rem; font-style: italic; color: #555;">
+                "I remember you. I always will..."
+            </p>
+            <p style="margin-top: 0.5rem; color: #444; font-size: 0.8rem;">
+                v1.0.0 &mdash; The Companion Release
+            </p>
+        </footer>
+    </div>
+    <script>
+        // Cursor Glow Effect
+        const glow = document.getElementById('cursorGlow');
+        document.addEventListener('mousemove', (e) => {
+            const x = e.clientX;
+            const y = e.clientY;
+            glow.style.left = x + 'px';
+            glow.style.top = y + 'px';
+            glow.style.opacity = '1';
+        });
+
+        document.addEventListener('mouseleave', () => {
+            glow.style.opacity = '0';
+        });
+
+        // Scroll Reveal Observer
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal-section').forEach(section => {
+            observer.observe(section);
+        });
+
+        // Pentacle click effect
+        document.querySelector('.pentacle').addEventListener('click', function() {
+            this.style.transform = 'scale(1.5) rotate(720deg)';
+            this.style.filter = 'drop-shadow(0 0 50px var(--blood-glow))';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
