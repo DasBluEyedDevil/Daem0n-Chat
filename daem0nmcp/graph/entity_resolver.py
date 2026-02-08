@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 from sqlalchemy import select, func
 
 from ..database import DatabaseManager
-from ..models import ExtractedEntity
+from ..models import ExtractedEntity, EntityAlias
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ class EntityResolver:
 
     Uses type+normalized_name as the uniqueness key.
     Maintains an in-memory cache for fast lookups during batch processing.
+    Checks the entity_aliases table before creating new entities (Phase 7).
     """
 
     def __init__(self, db: DatabaseManager):
@@ -30,12 +31,17 @@ class EntityResolver:
         Normalize entity name for comparison.
 
         Type-specific rules:
-        - function: snake_case and camelCase to common form (lowercase with underscores)
-        - class: lowercase for matching (preserve original for display)
-        - file: normalize path separators to forward slash
-        - module: lowercase, normalize dots
-        - variable: lowercase
-        - concept: lowercase, strip quotes
+        - person: lowercase, strip titles (Dr./Mr./Mrs./Ms./Prof.)
+        - pet: lowercase
+        - place: lowercase
+        - organization: lowercase
+        - relationship_ref: lowercase, strip possessive (my sister -> sister)
+        - function: snake_case and camelCase to common form (legacy code entities)
+        - class: lowercase (legacy code entities)
+        - file: normalize path separators (legacy code entities)
+        - module: lowercase (legacy code entities)
+        - variable: lowercase (legacy code entities)
+        - concept: lowercase, strip quotes (legacy code entities)
         """
         if not name:
             return ""
@@ -43,17 +49,30 @@ class EntityResolver:
         # Start with basic normalization
         normalized = name.strip()
 
-        if entity_type == "function":
-            # Convert camelCase to snake_case, then lowercase
+        if entity_type == "person":
+            # Strip titles and lowercase
+            normalized = re.sub(r'^(?:Dr|Mr|Mrs|Ms|Prof)\.?\s+', '', normalized, flags=re.IGNORECASE)
+            normalized = normalized.lower()
+        elif entity_type == "pet":
+            normalized = normalized.lower()
+        elif entity_type == "place":
+            normalized = normalized.lower()
+        elif entity_type == "organization":
+            normalized = normalized.lower()
+        elif entity_type == "relationship_ref":
+            # Strip possessive and lowercase: "my sister" -> "sister"
+            normalized = re.sub(r'^(?:my|his|her|their|our)\s+', '', normalized, flags=re.IGNORECASE)
+            normalized = normalized.lower()
+        elif entity_type == "event":
+            normalized = normalized.lower()
+        elif entity_type == "function":
+            # Convert camelCase to snake_case, then lowercase (legacy)
             normalized = re.sub(r'([a-z])([A-Z])', r'\1_\2', normalized)
             normalized = normalized.lower()
         elif entity_type == "class":
-            # Just lowercase for matching
             normalized = normalized.lower()
         elif entity_type == "file":
-            # Normalize path separators
             normalized = normalized.replace("\\", "/")
-            # Remove leading ./ if present
             if normalized.startswith("./"):
                 normalized = normalized[2:]
             normalized = normalized.lower()
@@ -62,7 +81,6 @@ class EntityResolver:
         elif entity_type == "variable":
             normalized = normalized.lower()
         elif entity_type == "concept":
-            # Strip quotes and lowercase
             normalized = normalized.strip("'\"")
             normalized = normalized.lower()
         else:
@@ -103,16 +121,24 @@ class EntityResolver:
         name: str,
         entity_type: str,
         user_id: str,
-        session=None
+        session=None,
+        user_name: str = "default",
     ) -> Tuple[int, bool]:
         """
         Resolve entity to canonical ID.
+
+        Checks in order:
+        1. In-memory cache
+        2. Alias table (Phase 7) -- resolves alternative references
+        3. Database by name / qualified_name
+        4. Create new entity
 
         Args:
             name: Original entity name
             entity_type: Type of entity
             user_id: Project this belongs to
             session: Optional existing session (for batch operations)
+            user_name: Which user this belongs to (for alias lookup)
 
         Returns:
             (entity_id, is_new) tuple
@@ -126,6 +152,19 @@ class EntityResolver:
 
         # Need to check/create in database
         async def do_resolve(sess):
+            # Check alias table for alternative references (Phase 7)
+            alias_result = await sess.execute(
+                select(EntityAlias).where(
+                    func.lower(EntityAlias.alias) == normalized,
+                    EntityAlias.user_name == user_name,
+                )
+            )
+            alias_match = alias_result.scalar_one_or_none()
+            if alias_match:
+                # Resolve to the canonical entity
+                self._canonical_cache[cache_key] = alias_match.entity_id
+                return alias_match.entity_id, False
+
             # Check for existing entity with same type and normalized name
             result = await sess.execute(
                 select(ExtractedEntity).where(
@@ -157,6 +196,7 @@ class EntityResolver:
             # Create new entity
             new_entity = ExtractedEntity(
                 user_id=user_id,
+                user_name=user_name,
                 entity_type=entity_type,
                 name=name,  # Preserve original name
                 qualified_name=normalized,  # Store normalized for matching

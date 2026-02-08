@@ -1,11 +1,10 @@
 """
-Entity Extractor - Auto-extract entities from memory content.
+Entity Extractor - Auto-extract personal entities from memory content.
 
-Extracts:
-- Function names: foo_bar(), fooBar()
-- Class names: PascalCase words
-- File paths: paths with extensions
-- Concepts: Key domain terms
+Extracts conversational entities (Phase 7: personal knowledge graph):
+- Person names: Proper nouns (Sarah, John Smith, Dr. Williams)
+- Pet names: After possessive + pet word (my dog Max)
+- Relationship references: Possessive + relation (my sister, his mom)
 """
 
 import re
@@ -15,47 +14,76 @@ from typing import Dict, List, Any
 logger = logging.getLogger(__name__)
 
 
-# Patterns for entity extraction
-PATTERNS = {
-    # Function calls: word followed by parentheses
-    "function": re.compile(r'\b([a-z_][a-z0-9_]*)\s*\(', re.IGNORECASE),
+# Personal entity extraction patterns (Phase 7: conversational, not code)
+PERSONAL_PATTERNS = {
+    # Person names: Capitalized proper nouns (2+ chars), optional title
+    # Matches: "Sarah", "John Smith", "Dr. Williams"
+    "person": re.compile(
+        r'\b(?:(?:Dr|Mr|Mrs|Ms|Prof)\.?\s+)?'
+        r'([A-Z][a-z]{1,}(?:\s+[A-Z][a-z]{1,}){0,2})\b'
+    ),
 
-    # Class names: PascalCase words (2+ capital letters or Capital followed by lowercase)
-    "class": re.compile(r'\b([A-Z][a-z]+(?:[A-Z][a-z]+)+|[A-Z]{2,}[a-z]+)\b'),
+    # Pet names: after possessive + pet word
+    # Matches: "my dog Max", "her cat Luna"
+    "pet": re.compile(
+        r'(?:my|his|her|their|our)\s+(?:dog|cat|pet|bird|fish|hamster|rabbit|parrot|turtle|horse)\s+'
+        r'([A-Z][a-z]+)\b',
+        re.IGNORECASE
+    ),
 
-    # File paths: word.ext or path/word.ext
-    "file": re.compile(r'(?:[\w./\\-]+/)?[\w.-]+\.[a-z]{1,4}\b'),
-
-    # Module imports: from x import y, import x
-    "module": re.compile(r'(?:from\s+|import\s+)([\w.]+)'),
-
-    # Variable-like references: snake_case in backticks or quotes
-    "variable": re.compile(r'[`\'"]([a-z_][a-z0-9_]*)[`\'"]'),
+    # Relationship references: "my sister", "his mom"
+    # These produce aliases, not entities directly -- extracted as "relationship_ref" type
+    "relationship_ref": re.compile(
+        r'\b((?:my|his|her|their|our)\s+'
+        r'(?:mom|mother|dad|father|sister|brother|wife|husband|'
+        r'partner|boyfriend|girlfriend|son|daughter|friend|boss|coworker|neighbor|'
+        r'aunt|uncle|cousin|grandma|grandmother|grandpa|grandfather|'
+        r'niece|nephew|roommate|fiance|fiancee))\b',
+        re.IGNORECASE
+    ),
 }
 
-# Words to ignore (common false positives)
-STOP_WORDS = {
+# Backward compatibility alias
+PATTERNS = PERSONAL_PATTERNS
+
+# Common words that are NOT entities (false positive filter)
+STOP_WORDS = frozenset({
     "the", "and", "for", "with", "use", "get", "set", "add", "new",
     "this", "that", "from", "have", "been", "will", "can", "should",
-    "def", "class", "return", "import", "from", "if", "else", "elif",
-    "true", "false", "none", "null", "self", "cls"
-}
+    "just", "also", "very", "much", "some", "any", "all", "but",
+    "not", "what", "when", "where", "how", "why", "who", "which",
+    "would", "could", "there", "about", "like", "into", "over",
+    "then", "them", "been", "being", "having", "doing", "going",
+    "today", "tomorrow", "yesterday", "monday", "tuesday", "wednesday",
+    "thursday", "friday", "saturday", "sunday", "january", "february",
+    "march", "april", "may", "june", "july", "august", "september",
+    "october", "november", "december",
+    # Pronouns/determiners that appear capitalized at sentence start
+    "my", "his", "her", "their", "our", "your", "its",
+    "she", "he", "they", "we", "you",
+    # Common verbs/words that appear capitalized at sentence start
+    "the", "said", "told", "went", "had", "was", "were", "are",
+    "really", "think", "know", "want", "need", "love", "hate",
+    "still", "maybe", "sure", "well", "now", "here",
+    # Filler words
+    "oh", "hey", "hi", "yes", "no", "okay", "yeah", "nah",
+    "so", "because", "since", "after", "before",
+})
 
 
 class EntityExtractor:
     """
-    Extracts entities from text content using pattern matching.
+    Extracts personal entities from text content using pattern matching.
 
-    Entity types:
-    - function: Function or method names
-    - class: Class names (PascalCase)
-    - file: File paths
-    - module: Module/package names
-    - variable: Variable references
+    Entity types (Phase 7 - personal knowledge graph):
+    - person: People names (Sarah, Dr. Williams)
+    - pet: Pet names after possessive context (my dog Max)
+    - relationship_ref: Relationship references (my sister, his mom)
+      These create aliases linking to person entities, not standalone entities.
     """
 
     def __init__(self, custom_patterns: Dict[str, re.Pattern] = None):
-        self.patterns = {**PATTERNS}
+        self.patterns = {**PERSONAL_PATTERNS}
         if custom_patterns:
             self.patterns.update(custom_patterns)
 
@@ -114,65 +142,29 @@ class EntityExtractor:
 
     def extract_concepts(self, text: str, min_frequency: int = 1) -> List[Dict[str, Any]]:
         """
-        Extract domain concepts (key noun phrases).
+        Extract domain concepts (no-op for personal entities).
 
-        Uses simple heuristics:
-        - Capitalized phrases (after sentence start)
-        - Technical terms (words with underscores, camelCase)
-        - Quoted terms
+        Code concepts are not relevant for the personal knowledge graph.
+        Returns empty list.
 
         Args:
             text: Content to analyze
             min_frequency: Minimum occurrences to include
 
         Returns:
-            List of concept entities
+            Empty list (personal entities don't use concept extraction)
         """
-        concepts = []
-
-        # Quoted terms
-        for match in re.finditer(r'["\']([^"\']+)["\']', text):
-            term = match.group(1).strip()
-            if len(term) > 2 and len(term) < 50:
-                concepts.append({
-                    "type": "concept",
-                    "name": term,
-                    "context": match.group(0),
-                    "position": match.start()
-                })
-
-        # Technical terms with underscores
-        for match in re.finditer(r'\b([A-Z_]+(?:_[A-Z]+)+)\b', text):
-            term = match.group(1)
-            if len(term) > 3:
-                concepts.append({
-                    "type": "concept",
-                    "name": term,
-                    "context": match.group(0),
-                    "position": match.start()
-                })
-
-        return concepts
+        return []
 
     def extract_all(self, text: str) -> List[Dict[str, Any]]:
         """
-        Extract all entity types including concepts.
+        Extract all entity types from text.
 
         Args:
             text: Content to analyze
 
         Returns:
-            Combined list of all extracted entities
+            List of all extracted entities sorted by position
         """
         entities = self.extract_entities(text)
-        concepts = self.extract_concepts(text)
-
-        # Combine and deduplicate
-        seen = {(e["type"], e["name"].lower()) for e in entities}
-        for concept in concepts:
-            key = (concept["type"], concept["name"].lower())
-            if key not in seen:
-                entities.append(concept)
-                seen.add(key)
-
         return sorted(entities, key=lambda e: e["position"])
