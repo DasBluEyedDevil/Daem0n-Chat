@@ -22,11 +22,11 @@ except ImportError:
     from daem0nmcp.logging_config import with_request_id
     from daem0nmcp.models import Memory
 
-from sqlalchemy import select, func, update, distinct
+from sqlalchemy import select, func, update, distinct, or_
 
 logger = logging.getLogger(__name__)
 
-VALID_ACTIONS = {"get", "switch_user", "set_name", "set_claude_name", "list_users"}
+VALID_ACTIONS = {"get", "switch_user", "set_name", "set_claude_name", "list_users", "introspect"}
 
 
 @mcp.tool(version=__version__)
@@ -44,6 +44,7 @@ async def daem0n_profile(
     - 'set_name': Set the current user's display name (pass name).
     - 'set_claude_name': Set what this user calls Claude (pass name).
     - 'list_users': List all known users on this device.
+    - 'introspect': Show everything Claude knows about the current user, organized by category.
     """
     if not user_id and not _default_user_id:
         return _missing_user_id_error()
@@ -302,6 +303,52 @@ async def daem0n_profile(
             "current_user": ctx.current_user,
             "users": users,
             "total_users": len(users),
+        }
+
+    # ---- INTROSPECT: show everything known about the current user ----
+    elif action == "introspect":
+        current = ctx.current_user
+
+        # Query ALL non-archived memories for this user
+        async with ctx.db_manager.get_session() as session:
+            result = await session.execute(
+                select(Memory).where(
+                    Memory.user_name == current,
+                    or_(Memory.archived == False, Memory.archived.is_(None)),
+                ).order_by(Memory.created_at.desc())
+            )
+            memories = result.scalars().all()
+
+        # Group by category (memories can appear in multiple groups)
+        by_category = {}
+        permanent_count = 0
+        for mem in memories:
+            cats = mem.categories or []
+            if mem.is_permanent:
+                permanent_count += 1
+            for cat in cats:
+                if cat not in by_category:
+                    by_category[cat] = {"count": 0, "memories": []}
+                by_category[cat]["count"] += 1
+                by_category[cat]["memories"].append({
+                    "id": mem.id,
+                    "content": mem.content[:150],  # Truncate long content
+                    "tags": mem.tags or [],
+                    "created_at": mem.created_at.isoformat() if mem.created_at else None,
+                    "is_permanent": mem.is_permanent,
+                })
+
+        # Sort categories alphabetically for consistent output
+        sorted_categories = dict(sorted(by_category.items()))
+
+        return {
+            "type": "introspection",
+            "user_name": current,
+            "total_memories": len(memories),
+            "by_category": sorted_categories,
+            "permanent_count": permanent_count,
+            "total_categories_used": len(by_category),
+            "note": "Individual category counts may exceed total_memories because memories can belong to multiple categories.",
         }
 
     return {"error": f"Unknown action: {action}"}
