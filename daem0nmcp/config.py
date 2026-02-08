@@ -128,6 +128,11 @@ class Settings(BaseSettings):
     # CommunityRefresh strategy
     dream_community_staleness_threshold: int = 10      # New memories before community rebuild
 
+    # Auto-detection settings
+    auto_detect_confidence_high: float = 0.95      # >= this: auto-store
+    auto_detect_confidence_medium: float = 0.70     # >= this: suggest confirmation
+    auto_decay_multiplier: float = 0.7              # Auto-detected memories decay at 70% of normal half-life
+
     # Cognitive Tools
     cognitive_debate_max_rounds: int = 5
     cognitive_debate_convergence_threshold: float = 0.05

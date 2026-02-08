@@ -35,6 +35,7 @@ from .cache import get_recall_cache, make_cache_key
 from . import vectors
 from .graph import KnowledgeGraph
 from .recall_planner import RecallPlanner
+from .auto_detect import CATEGORY_HALF_LIVES, AUTO_DECAY_MULTIPLIER
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 # Valid relationship types for graph edges
@@ -1232,7 +1233,26 @@ class MemoryManager:
             if getattr(mem, 'is_permanent', False) or (set(mem_categories) & PERMANENT_CATEGORIES):
                 decay = 1.0  # No decay for permanent memories
             else:
-                decay = calculate_memory_decay(mem.created_at, decay_half_life_days)
+                # Per-category decay: use the slowest (most generous) rate among categories
+                half_lives = [
+                    CATEGORY_HALF_LIVES[cat]
+                    for cat in mem_categories
+                    if cat in CATEGORY_HALF_LIVES
+                ]
+                effective_half_life = max(half_lives) if half_lives else decay_half_life_days
+
+                # Auto-detected memories decay faster than explicit ones
+                mem_tags = getattr(mem, 'tags', None) or []
+                if isinstance(mem_tags, str):
+                    import json
+                    try:
+                        mem_tags = json.loads(mem_tags)
+                    except (json.JSONDecodeError, TypeError):
+                        mem_tags = []
+                if "auto" in mem_tags and "explicit" not in mem_tags:
+                    effective_half_life *= AUTO_DECAY_MULTIPLIER
+
+                decay = calculate_memory_decay(mem.created_at, effective_half_life)
 
             final_score = base_score * decay
 
