@@ -1,5 +1,5 @@
 """
-Shared FastMCP instance for Daem0nMCP.
+Shared FastMCP instance for DaemonChat.
 
 This module provides the singleton FastMCP instance that all tool modules
 register their @mcp.tool decorators against. It sits at the bottom of the
@@ -47,4 +47,4 @@ if os.getenv('DAEM0NMCP_STRUCTURED_LOGS'):
     daem0n_logger.setLevel(logging.INFO)
 
 # Initialize FastMCP server
-mcp = FastMCP("Daem0nMCP")
+mcp = FastMCP("DaemonChat")

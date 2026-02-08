@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "daem0nmcp"
-version = "6.6.6"
-description = "AI Memory & Decision System - Give AI agents persistent memory and consistent decision-making"
+version = "1.0.0"
+description = "DaemonChat - Persistent conversational memory for Claude Desktop"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Daem0nMCP"}
+    {name = "DasBluEyedDevil"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -63,13 +63,17 @@ tracing = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
 ]
+installer = [
+    "claude-desktop-config>=0.2.0",
+]
 
 [project.scripts]
 daem0nmcp = "daem0nmcp.server:main"
+daem0nchat = "daem0nmcp.server:main"
 
 [project.urls]
-Homepage = "https://github.com/DasBluEyedDevil/Daem0n-MCP"
-Repository = "https://github.com/DasBluEyedDevil/Daem0n-MCP"
+Homepage = "https://github.com/DasBluEyedDevil/Daem0n-Chat"
+Repository = "https://github.com/DasBluEyedDevil/Daem0n-Chat"
 
 [tool.setuptools.packages.find]
 where = ["."]

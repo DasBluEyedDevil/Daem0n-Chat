@@ -1,5 +1,5 @@
 """
-Daem0nMCP Core Package
+DaemonChat - Conversational Memory for Claude Desktop
 """
 
 try:

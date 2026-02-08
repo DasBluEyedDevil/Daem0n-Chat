@@ -58,7 +58,7 @@ storage_path = settings.get_storage_path()
 db_manager = DatabaseManager(storage_path)
 memory_manager = MemoryManager(db_manager)
 rules_engine = RulesEngine(db_manager)
-logger.info(f"Daem0nMCP initialized (storage: {storage_path})")
+logger.info(f"DaemonChat initialized (storage: {storage_path})")
 
 # --- Dream scheduler setup ---
 _dream_scheduler = None
@@ -173,14 +173,14 @@ atexit.register(cleanup)
 def main():
     """Run the MCP server."""
     import argparse
-    parser = argparse.ArgumentParser(description="Daem0nMCP Server")
+    parser = argparse.ArgumentParser(description="DaemonChat Server")
     parser.add_argument("--transport", "-t", choices=["stdio", "sse"], default="stdio",
                         help="Transport type: stdio (default) or sse (HTTP server)")
     parser.add_argument("--port", "-p", type=int, default=8765, help="Port for SSE transport")
     parser.add_argument("--host", default="127.0.0.1", help="Host for SSE transport")
     args = parser.parse_args()
 
-    logger.info(f"Starting Daem0nMCP ({args.transport} transport, storage: {storage_path})")
+    logger.info(f"Starting DaemonChat ({args.transport} transport, storage: {storage_path})")
     try:
         if args.transport == "sse":
             mcp.run(transport="sse", host=args.host, port=args.port)
