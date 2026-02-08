@@ -98,6 +98,73 @@ class TestDaem0nRemember:
             call_kwargs = ctx.memory_manager.remember.call_args.kwargs
             assert call_kwargs["user_name"] == "Alice"
 
+    @pytest.mark.asyncio
+    async def test_remember_explicit_sets_permanent(self):
+        """When is_permanent=True, force permanence via SQL UPDATE after remember."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Alice"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 5,
+                "categories": ["fact"],
+                "content": "Sister is Sarah",
+            })
+
+            # Mock db session for the UPDATE query
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="Sister is Sarah",
+                categories="fact",
+                tags=["explicit"],
+                is_permanent=True,
+                user_id="/test/user",
+            )
+
+            assert result["is_permanent"] is True
+            # Verify the UPDATE was executed
+            mock_session.execute.assert_called_once()
+            mock_session.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remember_without_permanent_skips_update(self):
+        """When is_permanent is not passed, no SQL UPDATE for permanence occurs."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Bob"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 6,
+                "categories": ["preference"],
+                "content": "Likes pizza",
+            })
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+            result = await daem0n_remember(
+                content="Likes pizza",
+                categories="preference",
+                user_id="/test/user",
+            )
+
+            assert result["id"] == 6
+            # is_permanent should NOT have been set by the tool
+            assert "is_permanent" not in result or result.get("is_permanent") is not True
+            # db_manager session should NOT have been used for an update
+            ctx.db_manager.get_session.assert_not_called()
+
 
 class TestDaem0nRecall:
     """Tests for daem0n_recall tool."""
@@ -888,6 +955,150 @@ class TestDaem0nProfile:
 
             assert "error" in result
             assert "valid_actions" in result
+
+    @pytest.mark.asyncio
+    async def test_profile_introspect_returns_grouped_memories(self):
+        """Introspect returns all memories grouped by category with counts."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Alice"
+
+            # Create mock Memory objects
+            mem1 = MagicMock(spec=Memory)
+            mem1.id = 1
+            mem1.content = "Sister is Sarah"
+            mem1.categories = ["fact", "relationship"]
+            mem1.tags = []
+            mem1.is_permanent = True
+            mem1.archived = False
+            mem1.created_at = datetime(2026, 2, 7, tzinfo=timezone.utc)
+
+            mem2 = MagicMock(spec=Memory)
+            mem2.id = 2
+            mem2.content = "Likes hiking"
+            mem2.categories = ["preference"]
+            mem2.tags = []
+            mem2.is_permanent = False
+            mem2.archived = False
+            mem2.created_at = datetime(2026, 2, 6, tzinfo=timezone.utc)
+
+            mem3 = MagicMock(spec=Memory)
+            mem3.id = 3
+            mem3.content = "Works at Google"
+            mem3.categories = ["fact"]
+            mem3.tags = ["profile"]
+            mem3.is_permanent = True
+            mem3.archived = False
+            mem3.created_at = datetime(2026, 2, 5, tzinfo=timezone.utc)
+
+            # Mock session returning the 3 memories
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mem1, mem2, mem3]
+            mock_result.scalars.return_value = mock_scalars
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="introspect",
+                user_id="/test/user",
+            )
+
+            assert result["type"] == "introspection"
+            assert result["user_name"] == "Alice"
+            assert result["total_memories"] == 3
+            assert "fact" in result["by_category"]
+            assert result["by_category"]["fact"]["count"] == 2
+            assert "relationship" in result["by_category"]
+            assert result["by_category"]["relationship"]["count"] == 1
+            assert "preference" in result["by_category"]
+            assert result["by_category"]["preference"]["count"] == 1
+            assert result["permanent_count"] == 2
+            assert result["total_categories_used"] == 3
+
+    @pytest.mark.asyncio
+    async def test_profile_introspect_empty(self):
+        """Introspect with no memories returns empty structure."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Bob"
+
+            # Mock session returning no memories
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = []
+            mock_result.scalars.return_value = mock_scalars
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="introspect",
+                user_id="/test/user",
+            )
+
+            assert result["total_memories"] == 0
+            assert result["by_category"] == {}
+            assert result["permanent_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_profile_introspect_content_truncated(self):
+        """Introspect truncates long content to 150 chars."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "Carol"
+
+            # Memory with very long content
+            mem = MagicMock(spec=Memory)
+            mem.id = 1
+            mem.content = "A" * 200
+            mem.categories = ["fact"]
+            mem.tags = []
+            mem.is_permanent = False
+            mem.archived = False
+            mem.created_at = datetime(2026, 2, 7, tzinfo=timezone.utc)
+
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_scalars = MagicMock()
+            mock_scalars.all.return_value = [mem]
+            mock_result.scalars.return_value = mock_scalars
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(
+                action="introspect",
+                user_id="/test/user",
+            )
+
+            content = result["by_category"]["fact"]["memories"][0]["content"]
+            assert len(content) <= 150
 
 
 class TestDaem0nStatus:
