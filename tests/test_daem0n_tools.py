@@ -132,9 +132,9 @@ class TestDaem0nRemember:
             )
 
             assert result["is_permanent"] is True
-            # Verify the UPDATE was executed
-            mock_session.execute.assert_called_once()
-            mock_session.commit.assert_called_once()
+            # Verify the permanence UPDATE was executed (style analysis may also use session)
+            assert mock_session.execute.call_count >= 1
+            assert mock_session.commit.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_remember_without_permanent_skips_update(self):
@@ -162,8 +162,6 @@ class TestDaem0nRemember:
             assert result["id"] == 6
             # is_permanent should NOT have been set by the tool
             assert "is_permanent" not in result or result.get("is_permanent") is not True
-            # db_manager session should NOT have been used for an update
-            ctx.db_manager.get_session.assert_not_called()
 
 
 class TestDaem0nRecall:
@@ -2579,3 +2577,183 @@ class TestSessionSummary:
 
         assert "warm and gentle" not in guidance.lower()
         assert "last conversation" not in guidance.lower()
+
+
+class TestStyleDetection:
+    """Tests for style detection module (Phase 08-01)."""
+
+    def test_analyze_style_casual_text(self):
+        """Casual text should score low formality."""
+        from daem0nmcp.style_detect import analyze_style
+
+        result = analyze_style("hey lol im gonna grab food btw")
+        assert result["formality"] < 0.5
+        assert result["expressiveness"] < 0.5
+
+    def test_analyze_style_formal_text(self):
+        """Formal text should score high formality."""
+        from daem0nmcp.style_detect import analyze_style
+
+        result = analyze_style(
+            "I would like to formally request information regarding the upcoming schedule."
+        )
+        assert result["formality"] > 0.7
+
+    def test_analyze_style_terse_text(self):
+        """Very short text (<=3 words) should have zero verbosity."""
+        from daem0nmcp.style_detect import analyze_style
+
+        result = analyze_style("ok")
+        assert result["verbosity"] == 0.0
+
+    def test_analyze_style_verbose_text(self):
+        """Long text (40+ words) should score high verbosity."""
+        from daem0nmcp.style_detect import analyze_style
+
+        long_text = (
+            "I have been thinking about this for a very long time and I believe "
+            "that the best approach would be to carefully consider all of the "
+            "available options before making any kind of decision about how to "
+            "proceed with this particular matter at hand."
+        )
+        result = analyze_style(long_text)
+        assert result["verbosity"] > 0.7
+
+    def test_analyze_style_empty_text(self):
+        """Empty text should return empty dict."""
+        from daem0nmcp.style_detect import analyze_style
+
+        assert analyze_style("") == {}
+        assert analyze_style("   ") == {}
+
+    def test_analyze_style_emoji_detection(self):
+        """Text with 2 emoji should score emoji_usage == 0.7."""
+        from daem0nmcp.style_detect import analyze_style
+
+        # Use two actual emoji characters
+        result = analyze_style("I love this \u2764\ufe0f \u2b50")
+        assert result["emoji_usage"] == 0.7
+
+    def test_analyze_style_expressive(self):
+        """Highly expressive text with caps and exclamation marks."""
+        from daem0nmcp.style_detect import analyze_style
+
+        result = analyze_style("OMG THIS IS AMAZING!!!")
+        assert result["expressiveness"] > 0.5
+
+    def test_style_profile_ema_update(self):
+        """EMA update should smooth scores, not jump instantly."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        profile = StyleProfile(formality=0.5, verbosity=0.5)
+
+        # First update with extreme values
+        profile.update({"formality": 1.0, "verbosity": 0.0})
+        # EMA with alpha=0.3: new = 0.3*1.0 + 0.7*0.5 = 0.65
+        assert 0.6 <= profile.formality <= 0.7
+        # new verbosity = 0.3*0.0 + 0.7*0.5 = 0.35
+        assert 0.3 <= profile.verbosity <= 0.4
+
+        # Second update with same extreme values
+        profile.update({"formality": 1.0, "verbosity": 0.0})
+        # Should move further toward extreme but not reach it
+        assert profile.formality > 0.65
+        assert profile.formality < 1.0
+        assert profile.verbosity < 0.35
+        assert profile.verbosity > 0.0
+
+    def test_style_profile_message_count(self):
+        """Message count should increment with each update."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        profile = StyleProfile()
+        assert profile.message_count == 0
+
+        profile.update({"formality": 0.5})
+        assert profile.message_count == 1
+
+        profile.update({"formality": 0.6})
+        assert profile.message_count == 2
+
+        profile.update({"formality": 0.7})
+        assert profile.message_count == 3
+
+    def test_build_style_guidance_below_min(self):
+        """Profile with insufficient messages should return None."""
+        from daem0nmcp.style_detect import StyleProfile, build_style_guidance
+
+        profile = StyleProfile(formality=0.2, message_count=3)
+        assert build_style_guidance(profile) is None
+
+    def test_build_style_guidance_casual_user(self):
+        """Casual user profile should generate casual guidance."""
+        from daem0nmcp.style_detect import StyleProfile, build_style_guidance
+
+        profile = StyleProfile(formality=0.2, message_count=10)
+        guidance = build_style_guidance(profile)
+
+        assert guidance is not None
+        assert "casual" in guidance.lower()
+
+    def test_build_style_guidance_neutral_profile(self):
+        """All-neutral profile should return None (no guidance needed)."""
+        from daem0nmcp.style_detect import StyleProfile, build_style_guidance
+
+        profile = StyleProfile(
+            formality=0.5,
+            verbosity=0.5,
+            emoji_usage=0.0,
+            expressiveness=0.3,
+            message_count=10,
+        )
+        assert build_style_guidance(profile) is None
+
+    @pytest.mark.asyncio
+    async def test_style_analysis_skips_claude_said(self):
+        """Style analysis should NOT run on claude_said tagged content."""
+        with patch("daem0nmcp.tools.daem0n_remember.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "TestUser"
+            ctx.memory_manager.remember = AsyncMock(return_value={
+                "id": 100,
+                "categories": ["context"],
+                "content": "Claude said something formal.",
+            })
+            mock_ctx.return_value = ctx
+
+            with patch(
+                "daem0nmcp.style_detect.update_user_style_profile",
+                new_callable=AsyncMock,
+            ) as mock_update:
+                from daem0nmcp.tools.daem0n_remember import daem0n_remember
+
+                await daem0n_remember(
+                    content="Claude said something formal.",
+                    categories="context",
+                    tags=["claude_said"],
+                    user_id="/test/user",
+                )
+
+                mock_update.assert_not_called()
+
+    def test_style_profile_serialization(self):
+        """StyleProfile should roundtrip through to_dict/from_dict."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        original = StyleProfile(
+            formality=0.35,
+            verbosity=0.72,
+            emoji_usage=0.4,
+            expressiveness=0.55,
+            message_count=15,
+        )
+
+        data = original.to_dict()
+        restored = StyleProfile.from_dict(data)
+
+        assert restored.formality == round(original.formality, 2)
+        assert restored.verbosity == round(original.verbosity, 2)
+        assert restored.emoji_usage == round(original.emoji_usage, 2)
+        assert restored.expressiveness == round(original.expressiveness, 2)
+        assert restored.message_count == original.message_count

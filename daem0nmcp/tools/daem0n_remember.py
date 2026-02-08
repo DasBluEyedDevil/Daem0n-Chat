@@ -133,6 +133,19 @@ async def daem0n_remember(
         tags.append(f"emotion:{emotion['emotion_label']}")
         tags.append(f"valence:{emotion['valence']}")
 
+    # Style analysis -- only for user-originated content (not claude_said/claude_commitment)
+    if "claude_said" not in tags and "claude_commitment" not in tags:
+        try:
+            try:
+                from ..style_detect import analyze_style, update_user_style_profile
+            except ImportError:
+                from daem0nmcp.style_detect import analyze_style, update_user_style_profile
+            style_scores = analyze_style(content)
+            if style_scores:
+                await update_user_style_profile(ctx, ctx.current_user, style_scores)
+        except Exception:
+            pass  # Style analysis is non-critical; don't break memory storage
+
     result = await ctx.memory_manager.remember(
         categories=categories,
         content=content,
