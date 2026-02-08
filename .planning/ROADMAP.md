@@ -79,11 +79,11 @@ Plans:
   2. High-confidence facts (>=0.95) are stored automatically; medium-confidence facts (0.70-0.95) are suggested for confirmation; low-confidence signals (<0.70) are skipped
   3. Memory decay is tuned for conversational use: explicitly requested memories and emotional moments persist indefinitely, while casual mentions and small-talk facts decay over time
   4. Auto-detection does not store greetings, filler, or small-talk as memories (signal-to-noise ratio stays healthy)
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Decay tuning & infrastructure: fix per-category decay bug in recall scoring, create auto_detect.py with noise filter and confidence routing, add config settings
+- [ ] 04-02-PLAN.md — Auto-detection integration & briefing: wire validation into daem0n_remember, add duplicate detection, enhance briefing with auto-detection guidance
 
 ### Phase 5: Session Experience
 **Goal**: Returning users feel recognized -- Claude greets them naturally, references relevant recent context, and follows up on unresolved threads from past conversations
