@@ -15,6 +15,7 @@ try:
     from ..logging_config import with_request_id
     from ..models import Memory
     from ..temporal import _humanize_timedelta
+    from ..style_detect import load_style_profile, build_style_guidance
 except ImportError:
     from daem0nmcp.mcp_instance import mcp
     from daem0nmcp import __version__
@@ -25,6 +26,7 @@ except ImportError:
     from daem0nmcp.logging_config import with_request_id
     from daem0nmcp.models import Memory
     from daem0nmcp.temporal import _humanize_timedelta
+    from daem0nmcp.style_detect import load_style_profile, build_style_guidance
 
 from sqlalchemy import select, func, or_, distinct
 
@@ -477,6 +479,14 @@ async def daem0n_briefing(
             "tags=['claude_commitment'] alongside the appropriate category. "
             "This ensures you can recall what YOU said, not just what the user said."
         )
+
+        # Style guidance for unnamed user
+        style_profile = await load_style_profile(ctx, "default")
+        if style_profile:
+            style_guidance = build_style_guidance(style_profile)
+            if style_guidance:
+                briefing["style_guidance"] = style_guidance
+
         return briefing
 
     # ---- RETURNING DEVICE: find most recently active user ----
@@ -814,5 +824,12 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
     surfacing = _build_thread_surfacing_guidance(unresolved_threads)
     if surfacing is not None:
         response["thread_surfacing_guidance"] = surfacing
+
+    # 8. Style adaptation guidance
+    style_profile = await load_style_profile(ctx, user_name)
+    if style_profile:
+        style_guidance = build_style_guidance(style_profile)
+        if style_guidance:
+            response["style_guidance"] = style_guidance
 
     return response

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 7 complete. Personal knowledge graph with multi-hop relational queries. Phase 8 next.
+**Current focus:** Phase 8 in progress. Adaptive personality -- style detection and briefing integration.
 
 ## Current Position
 
-Phase: 7 of 9 (Knowledge Graph Adaptation)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 07-02-PLAN.md
+Phase: 8 of 9 (Adaptive Personality)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-08 -- Completed 08-01-PLAN.md
 
-Progress: [██████████████████████████████████░░░░░░░░░░░░░░░░] ~59% (16/27 plans)
+Progress: [████████████████████████████████████░░░░░░░░░░░░░░] ~63% (17/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: ~8 minutes
-- Total execution time: 2.25 hours
+- Total execution time: 2.33 hours
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: [███████████████████████
 | 05 | 2/2 | 11min | 5.5min |
 | 06 | 2/2 | 8min | 4min |
 | 07 | 2/2 | 22min | 11min |
+| 08 | 1/2 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 06-01 (4min), 06-02 (4min), 07-01 (13min), 07-02 (9min)
-- Trend: Phase 7 averaged 11min/plan due to graph/model complexity; 07-02 faster than 07-01
+- Last 5 plans: 06-02 (4min), 07-01 (13min), 07-02 (9min), 08-01 (5min)
+- Trend: Phase 8 Plan 1 was fast (5min) -- straightforward module creation following established patterns
 
 *Updated after each plan completion*
 
@@ -119,6 +120,10 @@ Recent decisions affecting current work:
 - [07-02]: _find_connected_match checks both successors and predecessors for bidirectional entity edges
 - [07-02]: _resolve_reference tries alias table first, then direct entity name match (same priority as EntityResolver)
 - [07-02]: claude_statement_tracking added to all three briefing paths: new device, unnamed user, returning user
+- [08-01]: Style analysis wrapped in try/except in daem0n_remember for non-critical resilience
+- [08-01]: EMA alpha=0.3 configurable via style_ema_alpha setting
+- [08-01]: Style guidance requires minimum 5 messages (configurable via style_min_messages_for_guidance)
+- [08-01]: Neutral profiles (all mid-range scores) produce no guidance to avoid unnecessary constraints
 
 ### Pending Todos
 
@@ -135,9 +140,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 17:04 UTC
-Stopped at: Completed 07-02-PLAN.md (Phase 07 complete)
-Resume file: .planning/phases/08-adaptive-personality/ (phase needs research + planning)
+Last session: 2026-02-08 17:37 UTC
+Stopped at: Completed 08-01-PLAN.md (Phase 08, Plan 1 of 2)
+Resume file: .planning/phases/08-adaptive-personality/08-02-PLAN.md
 
 ## Phase 01 Summary
 
@@ -182,3 +187,8 @@ Phase 06 (Conversation Intelligence) is complete:
 Phase 07 (Knowledge Graph Adaptation) is complete:
 - 07-01: EntityAlias/EntityRelationship models, migration 19, personal entity extraction patterns, alias-aware resolver, entity manager methods
 - 07-02: Multi-hop relational queries via query_relational(), daem0n_relate query action, Claude statement tracking guidance, 14 new tests
+
+## Phase 08 Summary (in progress)
+
+Phase 08 (Adaptive Personality) -- 1 of 2 plans complete:
+- 08-01: Rule-based four-dimension style detection (formality, verbosity, emoji_usage, expressiveness), EMA-smoothed profiles, style analysis hook in daem0n_remember, 14 new tests
