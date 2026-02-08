@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Codebase Cleanup & Categories** - Strip coding modules, consolidate MCP tools, establish conversational memory categories ✓ COMPLETE
 - [x] **Phase 2: User Profiles & Multi-User** - Build user profile system with isolated per-user memory storage ✓ COMPLETE
 - [x] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability ✓ COMPLETE
-- [ ] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay
+- [x] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay ✓ COMPLETE
 - [ ] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context
 - [ ] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection
 - [ ] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall
@@ -82,8 +82,8 @@ Plans:
 **Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 04-01-PLAN.md — Decay tuning & infrastructure: fix per-category decay bug in recall scoring, create auto_detect.py with noise filter and confidence routing, add config settings
-- [ ] 04-02-PLAN.md — Auto-detection integration & briefing: wire validation into daem0n_remember, add duplicate detection, enhance briefing with auto-detection guidance
+- [x] 04-01-PLAN.md — Decay tuning & infrastructure: fix per-category decay bug in recall scoring, create auto_detect.py with noise filter and confidence routing, add config settings
+- [x] 04-02-PLAN.md — Auto-detection integration & briefing: wire validation into daem0n_remember, add duplicate detection, enhance briefing with auto-detection guidance
 
 ### Phase 5: Session Experience
 **Goal**: Returning users feel recognized -- Claude greets them naturally, references relevant recent context, and follows up on unresolved threads from past conversations
@@ -171,7 +171,7 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | 1. Codebase Cleanup & Categories | 3/3 | ✓ Complete | 2026-02-07 |
 | 2. User Profiles & Multi-User | 3/3 | ✓ Complete | 2026-02-07 |
 | 3. Explicit Memory Capture & Control | 2/2 | ✓ Complete | 2026-02-08 |
-| 4. Auto-Detection & Memory Decay | 0/2 | Not started | - |
+| 4. Auto-Detection & Memory Decay | 2/2 | ✓ Complete | 2026-02-08 |
 | 5. Session Experience | 0/2 | Not started | - |
 | 6. Conversation Intelligence | 0/2 | Not started | - |
 | 7. Knowledge Graph Adaptation | 0/2 | Not started | - |
