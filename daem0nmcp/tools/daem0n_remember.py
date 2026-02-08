@@ -34,6 +34,7 @@ async def daem0n_remember(
     rationale: Optional[str] = None,
     tags: Optional[List[str]] = None,
     is_permanent: Optional[bool] = None,
+    confidence: Optional[float] = None,
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -42,9 +43,16 @@ async def daem0n_remember(
     Supports multiple categories per memory.
 
     For explicit user requests ("remember that..."):
-    - Set is_permanent=True (user explicitly asked to remember, so it should not decay)
-    - Include "explicit" in tags to mark it as user-requested
+    - Set is_permanent=True and include "explicit" in tags
     - Pick the most appropriate category from the content
+
+    For auto-detected facts from natural conversation:
+    - Include "auto" in tags
+    - Set confidence (0.0-1.0): >=0.95 auto-stores, 0.70-0.95 suggests, <0.70 skips
+    - DO NOT auto-remember: greetings, filler, small-talk, hypotheticals,
+      temporary states ("I'm tired right now"), questions you asked
+    - DO auto-remember: names, relationships, personal facts, preferences,
+      goals, concerns, life events, routines, interests
     """
     if not user_id and not _default_user_id:
         return _missing_user_id_error()
@@ -63,7 +71,56 @@ async def daem0n_remember(
             "valid_categories": sorted(VALID_CATEGORIES),
         }
 
+    # Normalize tags to list early (used by auto-detection and remember call)
+    tags = list(tags or [])
+
+    # Get user context early (used by auto-detection duplicate check and remember call)
     ctx = await get_user_context(effective_user_id)
+
+    # Auto-detection validation pipeline
+    if "auto" in tags:
+        try:
+            from ..auto_detect import validate_auto_memory, DUPLICATE_SIMILARITY_THRESHOLD
+        except ImportError:
+            from daem0nmcp.auto_detect import validate_auto_memory, DUPLICATE_SIMILARITY_THRESHOLD
+        try:
+            from ..config import Settings
+        except ImportError:
+            from daem0nmcp.config import Settings
+
+        effective_confidence = float(confidence) if confidence is not None else 0.5
+        settings = Settings()
+        validation = validate_auto_memory(content, effective_confidence, settings)
+
+        if not validation["valid"]:
+            return {"status": "skipped", "reason": validation["reason"]}
+
+        # Duplicate detection: check if similar memory already exists
+        try:
+            existing = await ctx.memory_manager.recall(
+                topic=content,
+                limit=3,
+                user_id=ctx.user_id,
+                user_name=ctx.current_user,
+            )
+            for mem in existing.get("memories", []):
+                if mem.get("semantic_match", 0) >= DUPLICATE_SIMILARITY_THRESHOLD:
+                    return {"status": "skipped", "reason": "duplicate", "existing_memory_id": mem["id"]}
+        except Exception:
+            pass  # If duplicate check fails, proceed with storage
+
+        # Medium confidence: suggest confirmation instead of auto-storing
+        if validation.get("action") == "suggest":
+            return {
+                "status": "suggested",
+                "content": content,
+                "categories": categories if isinstance(categories, list) else [categories],
+                "confidence": effective_confidence,
+                "message": "Medium-confidence fact detected. Consider confirming with the user before storing.",
+            }
+
+        # High confidence: proceed to storage (fall through to existing logic)
+
     result = await ctx.memory_manager.remember(
         categories=categories,
         content=content,

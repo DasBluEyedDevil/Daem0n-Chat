@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 3 complete. Ready for Phase 4.
+**Current focus:** Phase 4 in progress. Plan 01 complete.
 
 ## Current Position
 
-Phase: 3 of 9 (Explicit Memory Capture & Control)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 03-02-PLAN.md
+Phase: 4 of 9 (Auto-Detection & Memory Decay)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-08 -- Completed 04-01-PLAN.md
 
-Progress: [####################] ~30% (8/27 plans)
+Progress: [#####################] ~33% (9/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: ~11 minutes
-- Total execution time: 1.3 hours
+- Total plans completed: 9
+- Average duration: ~10 minutes
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [####################] ~30% (8/27 plans)
 | 01 | 3/3 | 45min | 15min |
 | 02 | 3/3 | 28min | 9min |
 | 03 | 2/2 | 7min | 3.5min |
+| 04 | 1/2 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (7min), 02-03 (12min), 03-01 (3min), 03-02 (4min)
-- Trend: Accelerating -- Phase 3 both plans executed exactly as written
+- Last 5 plans: 02-03 (12min), 03-01 (3min), 03-02 (4min), 04-01 (4min)
+- Trend: Consistent ~4min for well-defined plans
 
 *Updated after each plan completion*
 
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - [03-02]: Content truncated to 150 chars in introspection output
 - [03-02]: is_permanent forced via SQL UPDATE after remember() to guarantee override regardless of category rules
 - [03-02]: Explicit remember guidance via tool description (is_permanent=True + tags=["explicit"])
+- [04-01]: Per-category decay uses max(half_lives) among categories -- slowest rate wins for multi-category memories
+- [04-01]: Auto-detected memories identified by tags containing 'auto' but not 'explicit'
+- [04-01]: Noise patterns match at start of content only (re.match, not re.search)
+- [04-01]: Quality thresholds: 15 char minimum, 4 word minimum
 
 ### Pending Todos
 
@@ -88,15 +93,14 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- Research flags Phase 4 (Auto-Detection) for deeper research during planning: GLiNER integration, confidence thresholds, false positive prevention
 - Research flags Phase 9 (Distribution) for deeper research during planning: PyInstaller antivirus mitigation, code signing, Inno Setup for MCP
 - Research flags Phase 8 (Adaptive Personality) for deeper research: emotion model evaluation, creepiness avoidance
 
 ## Session Continuity
 
-Last session: 2026-02-08 02:18 UTC
-Stopped at: Completed 03-02-PLAN.md (Phase 03 complete)
-Resume file: None
+Last session: 2026-02-08 02:55 UTC
+Stopped at: Completed 04-01-PLAN.md (Phase 04 plan 1/2 complete)
+Resume file: .planning/phases/04-auto-detection-memory-decay/04-02-PLAN.md
 
 ## Phase 01 Summary
 
@@ -117,3 +121,8 @@ Phase 02 (User Profiles & Multi-User) is complete:
 Phase 03 (Explicit Memory Capture & Control) is complete:
 - 03-01: Enhanced daem0n_forget with semantic search (query mode) and batch delete (confirm_ids), fixed recall cache bug, 7 new tests
 - 03-02: Added introspect action to daem0n_profile (category-grouped memory audit), enhanced daem0n_remember with is_permanent flag for explicit memories, 5 new tests
+
+## Phase 04 Progress
+
+Phase 04 (Auto-Detection & Memory Decay) in progress:
+- 04-01: Fixed per-category decay bug, created auto_detect.py with noise filter/confidence routing, added 31 tests

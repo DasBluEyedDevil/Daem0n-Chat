@@ -82,6 +82,12 @@ async def daem0n_briefing(
                 "Weave in 2-3 natural getting-to-know-you questions "
                 "(not an interview -- keep it casual and fun)."
             ),
+            "auto_detection_guidance": (
+                "As you chat, watch for personal facts the user shares naturally. "
+                "Call daem0n_remember with tags=['auto'] and confidence level (0.0-1.0) "
+                "to store them. Names, relationships, preferences, goals, and interests "
+                "are all worth remembering. Greetings and filler are not."
+            ),
             "memory_ids": [],
         }
 
@@ -111,6 +117,12 @@ async def daem0n_briefing(
             "This user has memories but hasn't shared their name yet. "
             "Greet them warmly and ask for their name so you can personalize. "
             "Use daem0n_profile(action='set_name', name='...') once you learn it."
+        )
+        briefing["auto_detection_guidance"] = (
+            "As you chat, watch for personal facts the user shares naturally. "
+            "Call daem0n_remember with tags=['auto'] and confidence level (0.0-1.0) "
+            "to store them. Names, relationships, preferences, goals, and interests "
+            "are all worth remembering. Greetings and filler are not."
         )
         return briefing
 
@@ -298,5 +310,27 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
 
     if active_routines:
         response["active_routines"] = active_routines[:3]
+
+    response["auto_detection_guidance"] = (
+        "Throughout this conversation, watch for personal information the user "
+        "shares naturally. When you notice memorable facts, call daem0n_remember "
+        "with tags=['auto'] and an appropriate confidence level.\n\n"
+        "REMEMBER these (with tags=['auto']):\n"
+        "- Names and relationships (sister Sarah, friend Mike)\n"
+        "- Personal facts (lives in Portland, works as a nurse)\n"
+        "- Preferences and opinions (hates cilantro, loves hiking)\n"
+        "- Goals and aspirations (training for marathon, learning Spanish)\n"
+        "- Concerns and worries (stressed about work, worried about mom)\n"
+        "- Life events (got promoted, moving next month)\n"
+        "- Routines and habits (morning coffee, Thursday yoga)\n"
+        "- Interests and hobbies (into woodworking, reads sci-fi)\n\n"
+        "DO NOT remember: greetings, filler, small-talk, hypotheticals, "
+        "temporary states, questions you asked, your own suggestions.\n\n"
+        "Confidence levels:\n"
+        "- HIGH (>=0.95): User directly stated a fact. Auto-stores.\n"
+        "- MEDIUM (0.70-0.95): User casually mentioned something. Returns suggestion.\n"
+        "- LOW (<0.70): Vague or uncertain. Skipped automatically.\n\n"
+        "Aim for 1-5 auto-detected memories per conversation. Be selective."
+    )
 
     return response
