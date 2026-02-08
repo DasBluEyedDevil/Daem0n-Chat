@@ -427,6 +427,13 @@ async def daem0n_briefing(
                 "to store them. Names, relationships, preferences, goals, and interests "
                 "are all worth remembering. Greetings and filler are not."
             ),
+            "claude_statement_tracking": (
+                "Track your own commitments and opinions by storing them as memories. "
+                "When you make a promise ('I'll remind you'), share an opinion, or ask a question "
+                "that needs follow-up, use daem0n_remember with tags=['claude_said'] or "
+                "tags=['claude_commitment'] alongside the appropriate category. "
+                "This ensures you can recall what YOU said, not just what the user said."
+            ),
             "memory_ids": [],
         }
 
@@ -462,6 +469,13 @@ async def daem0n_briefing(
             "Call daem0n_remember with tags=['auto'] and confidence level (0.0-1.0) "
             "to store them. Names, relationships, preferences, goals, and interests "
             "are all worth remembering. Greetings and filler are not."
+        )
+        briefing["claude_statement_tracking"] = (
+            "Track your own commitments and opinions by storing them as memories. "
+            "When you make a promise ('I'll remind you'), share an opinion, or ask a question "
+            "that needs follow-up, use daem0n_remember with tags=['claude_said'] or "
+            "tags=['claude_commitment'] alongside the appropriate category. "
+            "This ensures you can recall what YOU said, not just what the user said."
         )
         return briefing
 
@@ -760,6 +774,14 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         "- MEDIUM (0.70-0.95): User casually mentioned something. Returns suggestion.\n"
         "- LOW (<0.70): Vague or uncertain. Skipped automatically.\n\n"
         "Aim for 1-5 auto-detected memories per conversation. Be selective."
+    )
+
+    response["claude_statement_tracking"] = (
+        "Track your own commitments and opinions by storing them as memories. "
+        "When you make a promise ('I'll remind you'), share an opinion, or ask a question "
+        "that needs follow-up, use daem0n_remember with tags=['claude_said'] or "
+        "tags=['claude_commitment'] alongside the appropriate category. "
+        "This ensures you can recall what YOU said, not just what the user said."
     )
 
     # Build greeting guidance from gathered context

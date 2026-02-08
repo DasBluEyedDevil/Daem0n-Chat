@@ -22,7 +22,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-VALID_ACTIONS = {"link", "unlink", "related", "graph", "communities"}
+VALID_ACTIONS = {"link", "unlink", "related", "graph", "communities", "query"}
 
 
 @mcp.tool(version=__version__)
@@ -33,12 +33,14 @@ async def daem0n_relate(
     target_id: Optional[int] = None,
     relationship: Optional[str] = None,
     entity_name: Optional[str] = None,
+    query_parts: Optional[List[str]] = None,
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Manage relationships between memories and entities. Actions: 'link'
     (connect two memories), 'unlink', 'related' (find related memories),
-    'graph' (get knowledge graph view), 'communities' (list memory communities).
+    'graph' (get knowledge graph view), 'communities' (list memory communities),
+    'query' (multi-hop relational query, e.g. query_parts=["my sister", "dog"]).
     """
     if not user_id and not _default_user_id:
         return _missing_user_id_error()
@@ -99,5 +101,14 @@ async def daem0n_relate(
             "communities": communities,
             "total": len(communities),
         }
+
+    elif action == "query":
+        if not query_parts:
+            return {"error": "query requires query_parts (list of entity references to traverse)"}
+        kg = await ctx.memory_manager.get_knowledge_graph()
+        return await kg.query_relational(
+            query_parts=query_parts,
+            user_name=ctx.current_user,
+        )
 
     return {"error": "Unknown action"}

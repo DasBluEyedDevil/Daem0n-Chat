@@ -12,6 +12,7 @@ Node naming convention:
 Edge types:
 - Memory -> Entity: "references" (from MemoryEntityRef)
 - Memory -> Memory: relationship type (from MemoryRelationship)
+- Entity -> Entity: "entity_relationship" (from EntityRelationship, Phase 7)
 """
 
 import logging
@@ -97,10 +98,14 @@ class KnowledgeGraph:
         1. ExtractedEntity -> entity:{id} nodes
         2. MemoryEntityRef -> memory:{id} nodes + edges to entities
         3. MemoryRelationship -> edges between memory nodes
+        4. EntityRelationship -> edges between entity nodes (Phase 7)
         """
         from sqlalchemy import select
 
-        from ..models import ExtractedEntity, MemoryEntityRef, MemoryRelationship
+        from ..models import (
+            ExtractedEntity, MemoryEntityRef, MemoryRelationship,
+            EntityRelationship as EntityRelModel,
+        )
 
         async with self._db.get_session() as session:
             # 1. Load extracted entities as nodes
@@ -180,6 +185,27 @@ class KnowledgeGraph:
                 )
 
             logger.debug(f"Loaded {len(relationships)} memory-memory relationships")
+
+            # 4. Load entity-entity relationships (Phase 7: personal knowledge graph)
+            ent_rel_result = await session.execute(select(EntityRelModel))
+            entity_rels = ent_rel_result.scalars().all()
+
+            for rel in entity_rels:
+                source_node = f"entity:{rel.source_entity_id}"
+                target_node = f"entity:{rel.target_entity_id}"
+
+                # Only add edge if both entity nodes exist
+                if self._graph.has_node(source_node) and self._graph.has_node(target_node):
+                    self._graph.add_edge(
+                        source_node,
+                        target_node,
+                        edge_type="entity_relationship",
+                        relationship=rel.relationship,
+                        description=rel.description,
+                        confidence=rel.confidence,
+                    )
+
+            logger.debug(f"Loaded {len(entity_rels)} entity-entity relationships")
 
         logger.info(
             f"KnowledgeGraph loaded: {self.get_node_count()} nodes, "
@@ -459,6 +485,165 @@ class KnowledgeGraph:
             "direct_memories": direct_memory_ids,
             "related_memories": list(related_memory_ids),
         }
+
+    # =========================================================================
+    # Relational Query Methods (Phase 7: personal knowledge graph)
+    # =========================================================================
+
+    async def query_relational(
+        self,
+        query_parts: List[str],
+        user_name: str = "default",
+    ) -> Dict[str, Any]:
+        """
+        Multi-hop relational query traversing entity-entity edges.
+
+        Decomposes "my sister's dog" into ["my sister", "dog"] and:
+        1. Resolves "my sister" via alias table -> entity (e.g., Sarah)
+        2. From Sarah, finds connected entities matching "dog" (by type or name)
+        3. Returns terminal entity + all memories referencing it
+
+        Args:
+            query_parts: List of entity references to traverse, e.g. ["my sister", "dog"]
+            user_name: User scope for alias resolution
+
+        Returns:
+            Dict with found, entity info, memories, and traversal path
+        """
+        await self.ensure_loaded()
+
+        if not query_parts:
+            return {"found": False, "error": "No query parts provided"}
+
+        from sqlalchemy import select
+        from ..models import Memory
+
+        traversal_path = []
+
+        # Step 1: Resolve first reference via alias table or direct name match
+        current_entity_id = await self._resolve_reference(query_parts[0], user_name)
+        if current_entity_id is None:
+            return {"found": False, "error": f"Unknown reference: '{query_parts[0]}'"}
+
+        current_node = f"entity:{current_entity_id}"
+        attrs = self.get_node_attributes(current_node)
+        traversal_path.append(
+            attrs.get("name", str(current_entity_id)) if attrs else str(current_entity_id)
+        )
+
+        # Step 2: For each subsequent part, traverse to matching connected entity
+        for part in query_parts[1:]:
+            connected_id = self._find_connected_match(current_entity_id, part)
+            if connected_id is None:
+                return {
+                    "found": False,
+                    "error": f"No '{part}' connected to '{traversal_path[-1]}'",
+                    "partial_path": traversal_path,
+                }
+            current_entity_id = connected_id
+            node = f"entity:{current_entity_id}"
+            attrs = self.get_node_attributes(node)
+            traversal_path.append(
+                attrs.get("name", str(current_entity_id)) if attrs else str(current_entity_id)
+            )
+
+        # Step 3: Gather memories for terminal entity
+        memory_ids = self.get_memories_for_entity(current_entity_id)
+        terminal_attrs = self.get_node_attributes(f"entity:{current_entity_id}")
+
+        # Fetch memory content from DB
+        memories_data = []
+        if memory_ids:
+            async with self._db.get_session() as session:
+                result = await session.execute(
+                    select(Memory).where(Memory.id.in_(memory_ids))
+                )
+                memories = result.scalars().all()
+                for m in memories:
+                    memories_data.append({
+                        "id": m.id,
+                        "content": m.content,
+                        "categories": m.categories,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                    })
+
+        return {
+            "found": True,
+            "entity": {
+                "id": current_entity_id,
+                "name": terminal_attrs.get("name") if terminal_attrs else None,
+                "type": terminal_attrs.get("entity_type") if terminal_attrs else None,
+            },
+            "memories": memories_data,
+            "path": traversal_path,
+        }
+
+    async def _resolve_reference(self, reference: str, user_name: str) -> Optional[int]:
+        """Resolve a reference string to an entity ID via alias table or direct name match."""
+        from sqlalchemy import select, func
+        from ..models import EntityAlias, ExtractedEntity
+
+        ref_lower = reference.lower().strip()
+
+        async with self._db.get_session() as session:
+            # Try alias lookup first
+            alias_result = await session.execute(
+                select(EntityAlias).where(
+                    func.lower(EntityAlias.alias) == ref_lower,
+                    EntityAlias.user_name == user_name,
+                )
+            )
+            alias = alias_result.scalar_one_or_none()
+            if alias:
+                return alias.entity_id
+
+            # Try direct entity name match
+            entity_result = await session.execute(
+                select(ExtractedEntity).where(
+                    func.lower(ExtractedEntity.name) == ref_lower,
+                    ExtractedEntity.user_name == user_name,
+                )
+            )
+            entity = entity_result.scalar_one_or_none()
+            if entity:
+                return entity.id
+
+        return None
+
+    def _find_connected_match(self, entity_id: int, search_term: str) -> Optional[int]:
+        """Find an entity connected to entity_id that matches search_term by type or name."""
+        entity_node = f"entity:{entity_id}"
+        if not self._graph.has_node(entity_node):
+            return None
+
+        search_lower = search_term.lower().strip()
+
+        # Check all neighbors (both directions for entity-entity edges)
+        neighbors = set()
+        for succ in self._graph.successors(entity_node):
+            if succ.startswith("entity:"):
+                neighbors.add(succ)
+        for pred in self._graph.predecessors(entity_node):
+            if pred.startswith("entity:"):
+                neighbors.add(pred)
+
+        for neighbor in neighbors:
+            attrs = self._graph.nodes.get(neighbor, {})
+            entity_type = (attrs.get("entity_type") or "").lower()
+            entity_name = (attrs.get("name") or "").lower()
+
+            # Match by pet words -> pet type
+            pet_words = {"dog", "cat", "pet", "bird", "fish", "hamster", "rabbit", "parrot", "turtle", "horse"}
+            if search_lower in pet_words and entity_type == "pet":
+                return int(neighbor.split(":")[1])
+            # Direct type match
+            if search_lower == entity_type:
+                return int(neighbor.split(":")[1])
+            # Name match (exact or substring)
+            if search_lower == entity_name or search_lower in entity_name:
+                return int(neighbor.split(":")[1])
+
+        return None
 
     # =========================================================================
     # Multi-hop Query Methods (GraphRAG traversal)
