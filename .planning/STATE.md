@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 4 in progress. Plan 01 complete.
+**Current focus:** Phase 4 complete. Ready for Phase 5.
 
 ## Current Position
 
 Phase: 4 of 9 (Auto-Detection & Memory Decay)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-08 -- Completed 04-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-08 -- Completed 04-02-PLAN.md
 
-Progress: [#####################] ~33% (9/27 plans)
+Progress: [########################] ~37% (10/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: ~10 minutes
-- Total execution time: 1.4 hours
+- Total plans completed: 10
+- Average duration: ~9 minutes
+- Total execution time: 1.5 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [#####################] ~33% (9/27 plans)
 | 01 | 3/3 | 45min | 15min |
 | 02 | 3/3 | 28min | 9min |
 | 03 | 2/2 | 7min | 3.5min |
-| 04 | 1/2 | 4min | 4min |
+| 04 | 2/2 | 8min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (12min), 03-01 (3min), 03-02 (4min), 04-01 (4min)
+- Last 5 plans: 03-01 (3min), 03-02 (4min), 04-01 (4min), 04-02 (4min)
 - Trend: Consistent ~4min for well-defined plans
 
 *Updated after each plan completion*
@@ -83,6 +83,10 @@ Recent decisions affecting current work:
 - [04-01]: Auto-detected memories identified by tags containing 'auto' but not 'explicit'
 - [04-01]: Noise patterns match at start of content only (re.match, not re.search)
 - [04-01]: Quality thresholds: 15 char minimum, 4 word minimum
+- [04-02]: Auto-detection pipeline runs BEFORE storage, returning early for rejected content
+- [04-02]: ctx obtained early and reused for both duplicate check and remember call
+- [04-02]: Explicit remember (without 'auto' tag) bypasses all auto-detection validation
+- [04-02]: Auto-detection guidance added to all three briefing paths (new device, unnamed user, returning user)
 
 ### Pending Todos
 
@@ -98,9 +102,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 02:55 UTC
-Stopped at: Completed 04-01-PLAN.md (Phase 04 plan 1/2 complete)
-Resume file: .planning/phases/04-auto-detection-memory-decay/04-02-PLAN.md
+Last session: 2026-02-08 03:05 UTC
+Stopped at: Completed 04-02-PLAN.md (Phase 04 complete)
+Resume file: .planning/phases/05-personality-tone/05-RESEARCH.md (next phase)
 
 ## Phase 01 Summary
 
@@ -122,7 +126,8 @@ Phase 03 (Explicit Memory Capture & Control) is complete:
 - 03-01: Enhanced daem0n_forget with semantic search (query mode) and batch delete (confirm_ids), fixed recall cache bug, 7 new tests
 - 03-02: Added introspect action to daem0n_profile (category-grouped memory audit), enhanced daem0n_remember with is_permanent flag for explicit memories, 5 new tests
 
-## Phase 04 Progress
+## Phase 04 Summary
 
-Phase 04 (Auto-Detection & Memory Decay) in progress:
+Phase 04 (Auto-Detection & Memory Decay) is complete:
 - 04-01: Fixed per-category decay bug, created auto_detect.py with noise filter/confidence routing, added 31 tests
+- 04-02: Integrated auto-detection validation into daem0n_remember, added briefing guidance, added 8 tests
