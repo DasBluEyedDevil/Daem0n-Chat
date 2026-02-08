@@ -36,6 +36,7 @@ from . import vectors
 from .graph import KnowledgeGraph
 from .recall_planner import RecallPlanner
 from .auto_detect import CATEGORY_HALF_LIVES, AUTO_DECAY_MULTIPLIER
+from .temporal import _humanize_timedelta
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
 # Valid relationship types for graph edges
@@ -1297,7 +1298,8 @@ class MemoryManager:
                     'worked': mem.worked,
                     'is_permanent': mem.is_permanent,
                     'pinned': mem.pinned,
-                    'created_at': mem.created_at.isoformat()
+                    'created_at': mem.created_at.isoformat(),
+                    'time_ago': _humanize_timedelta(mem.created_at),
                 }
             else:
                 mem_dict = {
@@ -1314,7 +1316,8 @@ class MemoryManager:
                     'worked': mem.worked,
                     'is_permanent': mem.is_permanent,
                     'pinned': mem.pinned,
-                    'created_at': mem.created_at.isoformat()
+                    'created_at': mem.created_at.isoformat(),
+                    'time_ago': _humanize_timedelta(mem.created_at),
                 }
 
             # Add warning annotation for failed outcomes

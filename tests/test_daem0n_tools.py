@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 class TestDaem0nRemember:
@@ -1518,3 +1518,268 @@ class TestRememberScopedToUser:
 
             # Bob's recall returns nothing (different user)
             assert result["memories"] == []
+
+
+class TestSessionExperience:
+    """Tests for Phase 5 session experience enhancements."""
+
+    def test_humanize_timedelta_today(self):
+        """datetime.now(UTC) returns 'today'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        assert _humanize_timedelta(datetime.now(timezone.utc)) == "today"
+
+    def test_humanize_timedelta_yesterday(self):
+        """now - 1 day returns 'yesterday'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now(timezone.utc) - timedelta(days=1)
+        assert _humanize_timedelta(dt) == "yesterday"
+
+    def test_humanize_timedelta_days(self):
+        """now - 5 days returns '5 days ago'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now(timezone.utc) - timedelta(days=5)
+        assert _humanize_timedelta(dt) == "5 days ago"
+
+    def test_humanize_timedelta_weeks(self):
+        """now - 14 days returns '2 weeks ago'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now(timezone.utc) - timedelta(days=14)
+        assert _humanize_timedelta(dt) == "2 weeks ago"
+
+    def test_humanize_timedelta_months(self):
+        """now - 45 days returns 'about a month ago'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now(timezone.utc) - timedelta(days=45)
+        assert _humanize_timedelta(dt) == "about a month ago"
+
+    def test_humanize_timedelta_years(self):
+        """now - 400 days returns 'over a year ago'."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now(timezone.utc) - timedelta(days=400)
+        assert _humanize_timedelta(dt) == "over a year ago"
+
+    def test_humanize_timedelta_naive_datetime(self):
+        """Naive datetime (no tzinfo) is handled without error."""
+        from daem0nmcp.temporal import _humanize_timedelta
+        dt = datetime.now() - timedelta(days=3)
+        result = _humanize_timedelta(dt)
+        assert isinstance(result, str)
+        assert "3 days ago" == result
+
+    @pytest.mark.asyncio
+    async def test_briefing_contains_greeting_guidance(self):
+        """Returning user briefing contains greeting_guidance with user's name."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 5
+                    return result
+                if call_count["n"] == 2:
+                    result.all.return_value = [("Alice",)]
+                    return result
+                if call_count["n"] == 3:
+                    row = MagicMock()
+                    row.user_name = "Alice"
+                    row.last_active = datetime.now(timezone.utc)
+                    result.first.return_value = row
+                    return result
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            async def mock_recall(**kwargs):
+                tags = kwargs.get("tags", [])
+                if "profile" in (tags or []):
+                    return {
+                        "memories": [
+                            {
+                                "id": 1,
+                                "content": "Alice",
+                                "categories": ["fact"],
+                                "tags": ["profile", "identity", "name"],
+                            }
+                        ],
+                    }
+                return {"memories": []}
+
+            ctx.memory_manager.recall = AsyncMock(side_effect=mock_recall)
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert "greeting_guidance" in result
+            assert "Alice" in result["greeting_guidance"]
+
+    @pytest.mark.asyncio
+    async def test_briefing_unresolved_threads_have_time_ago(self):
+        """Unresolved threads in briefing contain time_ago string."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+                if call_count["n"] == 2:
+                    result.all.return_value = [("Bob",)]
+                    return result
+                if call_count["n"] == 3:
+                    row = MagicMock()
+                    row.user_name = "Bob"
+                    row.last_active = datetime.now(timezone.utc)
+                    result.first.return_value = row
+                    return result
+                if call_count["n"] == 4:
+                    # Unresolved threads query: return a concern memory
+                    mem = MagicMock()
+                    mem.id = 42
+                    mem.content = "Worried about job interview"
+                    mem.categories = ["concern"]
+                    mem.created_at = datetime.now(timezone.utc) - timedelta(days=3)
+                    mem.outcome = None
+                    mem.archived = False
+                    result.scalars.return_value = MagicMock(all=MagicMock(return_value=[mem]))
+                    return result
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert len(result["unresolved_threads"]) >= 1
+            for thread in result["unresolved_threads"]:
+                assert "time_ago" in thread
+                assert isinstance(thread["time_ago"], str)
+
+    @pytest.mark.asyncio
+    async def test_briefing_recent_topics_have_time_ago(self):
+        """Recent topics in briefing contain time_ago string."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+                if call_count["n"] == 2:
+                    result.all.return_value = [("Carol",)]
+                    return result
+                if call_count["n"] == 3:
+                    row = MagicMock()
+                    row.user_name = "Carol"
+                    row.last_active = datetime.now(timezone.utc)
+                    result.first.return_value = row
+                    return result
+                if call_count["n"] == 4:
+                    # Unresolved threads: empty
+                    result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                    return result
+                if call_count["n"] == 5:
+                    # Recent topics: return a memory
+                    mem = MagicMock()
+                    mem.id = 100
+                    mem.content = "Tried a new restaurant"
+                    mem.categories = ["event"]
+                    mem.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+                    mem.archived = False
+                    result.scalars.return_value = MagicMock(all=MagicMock(return_value=[mem]))
+                    return result
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert len(result["recent_topics"]) >= 1
+            for topic in result["recent_topics"]:
+                assert "time_ago" in topic
+                assert isinstance(topic["time_ago"], str)
+
+    @pytest.mark.asyncio
+    async def test_recall_results_have_time_ago(self):
+        """Recall results include time_ago string field."""
+        with patch("daem0nmcp.tools.daem0n_recall.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "default"
+            now = datetime.now(timezone.utc)
+            ctx.memory_manager.recall = AsyncMock(return_value={
+                "memories": [
+                    {
+                        "id": 1,
+                        "content": "User lives in Portland",
+                        "categories": ["fact"],
+                        "created_at": now.isoformat(),
+                        "time_ago": "today",
+                    },
+                ],
+            })
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_recall import daem0n_recall
+
+            result = await daem0n_recall(
+                query="portland",
+                user_id="/test/user",
+            )
+
+            assert "memories" in result
+            for mem in result["memories"]:
+                assert "time_ago" in mem
+                assert isinstance(mem["time_ago"], str)
