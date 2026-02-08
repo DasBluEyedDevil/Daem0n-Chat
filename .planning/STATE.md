@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 8 of 9 (Adaptive Personality)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 08-02-PLAN.md
+Phase: 9 of 9 (Distribution & Packaging)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-08 -- Completed 09-01-PLAN.md
 
-Progress: [██████████████████████████████████████░░░░░░░░░░░░] ~67% (18/27 plans)
+Progress: [███████████████████████████████████████░░░░░░░░░░░] ~70% (19/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
+- Total plans completed: 19
 - Average duration: ~8 minutes
-- Total execution time: 2.38 hours
+- Total execution time: 2.47 hours
 
 **By Phase:**
 
@@ -35,10 +35,11 @@ Progress: [███████████████████████
 | 06 | 2/2 | 8min | 4min |
 | 07 | 2/2 | 22min | 11min |
 | 08 | 2/2 | 10min | 5min |
+| 09 | 1/3 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 07-01 (13min), 07-02 (9min), 08-01 (5min), 08-02 (5min)
-- Trend: Phase 8 both plans fast (5min each) -- clean integration following established patterns
+- Last 5 plans: 07-02 (9min), 08-01 (5min), 08-02 (5min), 09-01 (5min)
+- Trend: Last 4 plans all 5min -- distribution foundation setup efficient
 
 *Updated after each plan completion*
 
@@ -127,6 +128,12 @@ Recent decisions affecting current work:
 - [08-02]: Style guidance surfaces in unnamed user and returning user paths, not new device path
 - [08-02]: Introspect shows both numeric scores and human-readable labels for transparency
 - [08-02]: Labels use 4-tier mapping: formality (very casual/casual/neutral/formal), verbosity (terse/moderate/verbose), emoji, expressiveness
+- [09-01]: Server renamed to DaemonChat (not Daem0nMCP) to avoid collision with DaemonMCP coding server
+- [09-01]: Package directory remains daem0nmcp/ internally but server identity is DaemonChat externally
+- [09-01]: Both daem0nmcp and daem0nchat script entry points for backward compatibility
+- [09-01]: claude-desktop-config library used for all config operations (not hand-rolled JSON)
+- [09-01]: Platform-specific storage paths default to %LOCALAPPDATA%/DaemonChat/ on Windows (isolates from DaemonMCP's per-project .daem0nmcp/ dirs)
+- [09-01]: Model downloader primarily for Inno Setup path; MCPB relies on auto-download on first use
 
 ### Pending Todos
 
@@ -143,9 +150,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 17:45 UTC
-Stopped at: Completed 08-02-PLAN.md (Phase 08 complete)
-Resume file: Phase 09 planning needed
+Last session: 2026-02-08 13:33 UTC
+Stopped at: Completed 09-01-PLAN.md
+Resume file: .planning/phases/09-distribution-packaging/09-02-PLAN.md
 
 ## Phase 01 Summary
 
@@ -196,3 +203,8 @@ Phase 07 (Knowledge Graph Adaptation) is complete:
 Phase 08 (Adaptive Personality) is complete:
 - 08-01: Rule-based four-dimension style detection (formality, verbosity, emoji_usage, expressiveness), EMA-smoothed profiles, style analysis hook in daem0n_remember, 14 new tests
 - 08-02: Style guidance in briefing for returning/unnamed users, style profile display in introspect with human-readable labels, 7 new tests (21 total style tests)
+
+## Phase 09 Summary
+
+Phase 09 (Distribution & Packaging) in progress:
+- 09-01: Server renamed to DaemonChat (distinct from DaemonMCP), version 1.0.0, installer modules (config_manager, health_check, post_install, model_downloader) using claude-desktop-config library, 12 new tests
