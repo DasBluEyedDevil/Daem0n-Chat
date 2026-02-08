@@ -94,11 +94,11 @@ Plans:
   2. Claude greets the user by name and references 1-2 relevant recent items naturally (not a data dump or robotic recitation)
   3. System detects unresolved threads from past conversations and surfaces them at appropriate moments (e.g., "You mentioned your job interview was coming up -- how did it go?")
   4. Recall includes temporal context so Claude can say things like "you mentioned this 3 weeks ago" or "you've been worried about this for a month"
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Temporal context & greeting guidance: create _humanize_timedelta utility, enrich briefing with time_ago fields and greeting_guidance, add time_ago to recall results
+- [ ] 05-02-PLAN.md — Thread detection & surfacing: refactor thread detection with priority scoring, follow-up types, 90-day staleness cutoff, mid-conversation surfacing guidance, recurring theme duration
 
 ### Phase 6: Conversation Intelligence
 **Goal**: Each conversation session is summarized with emotional context, and the system understands not just what was discussed but how the user felt about it
