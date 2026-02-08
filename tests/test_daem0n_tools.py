@@ -2757,3 +2757,297 @@ class TestStyleDetection:
         assert restored.emoji_usage == round(original.emoji_usage, 2)
         assert restored.expressiveness == round(original.expressiveness, 2)
         assert restored.message_count == original.message_count
+
+
+class TestStyleBriefingIntegration:
+    """Tests for style guidance in briefing and introspect (Phase 08-02)."""
+
+    @pytest.mark.asyncio
+    async def test_briefing_includes_style_guidance(self):
+        """Briefing includes style_guidance when user has >=5 analyzed messages."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_briefing.load_style_profile", new_callable=AsyncMock) as mock_load:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Return a casual style profile with 10 messages
+            mock_load.return_value = StyleProfile(
+                formality=0.2, verbosity=0.3,
+                emoji_usage=0.0, expressiveness=0.2,
+                message_count=10,
+            )
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+
+                if call_count["n"] == 2:
+                    result.all.return_value = [("default",)]
+                    return result
+
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert "style_guidance" in result
+            assert "casual" in result["style_guidance"].lower()
+
+    @pytest.mark.asyncio
+    async def test_briefing_omits_style_guidance_insufficient_messages(self):
+        """Briefing omits style_guidance when message_count < 5."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_briefing.load_style_profile", new_callable=AsyncMock) as mock_load:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # Only 3 messages analyzed -- below the 5-message threshold
+            mock_load.return_value = StyleProfile(
+                formality=0.2, verbosity=0.3,
+                emoji_usage=0.0, expressiveness=0.2,
+                message_count=3,
+            )
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+
+                if call_count["n"] == 2:
+                    result.all.return_value = [("default",)]
+                    return result
+
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert "style_guidance" not in result
+
+    @pytest.mark.asyncio
+    async def test_briefing_omits_style_guidance_no_style_memory(self):
+        """Briefing omits style_guidance when no style memory exists."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx, \
+             patch("daem0nmcp.tools.daem0n_briefing.load_style_profile", new_callable=AsyncMock) as mock_load:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            # No style memory at all
+            mock_load.return_value = None
+
+            call_count = {"n": 0}
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    result.scalar.return_value = 10
+                    return result
+
+                if call_count["n"] == 2:
+                    result.all.return_value = [("default",)]
+                    return result
+
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            assert "style_guidance" not in result
+
+    @pytest.mark.asyncio
+    async def test_introspect_includes_style_profile(self):
+        """Introspect response contains style_profile with all dimension fields."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "TestUser"
+
+            async def mock_execute(query):
+                result = MagicMock()
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            with patch(
+                "daem0nmcp.style_detect.load_style_profile",
+                new_callable=AsyncMock,
+                return_value=StyleProfile(
+                    formality=0.4, verbosity=0.5,
+                    emoji_usage=0.3, expressiveness=0.5,
+                    message_count=12,
+                ),
+            ):
+                from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+                result = await daem0n_profile(action="introspect", user_id="/test/user")
+
+            assert result["type"] == "introspection"
+            assert result["style_profile"] is not None
+            sp = result["style_profile"]
+            assert "formality" in sp
+            assert "verbosity" in sp
+            assert "emoji_usage" in sp
+            assert "expressiveness" in sp
+            assert "messages_analyzed" in sp
+            assert sp["messages_analyzed"] == 12
+
+    @pytest.mark.asyncio
+    async def test_introspect_style_profile_labels(self):
+        """Introspect style_profile contains correct human-readable labels."""
+        from daem0nmcp.style_detect import StyleProfile
+
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "TestUser"
+
+            async def mock_execute(query):
+                result = MagicMock()
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            # formality=0.2 -> "very casual", verbosity=0.15 -> "terse",
+            # emoji=0.6 -> "regular emoji user", expressiveness=0.7 -> "highly expressive"
+            with patch(
+                "daem0nmcp.style_detect.load_style_profile",
+                new_callable=AsyncMock,
+                return_value=StyleProfile(
+                    formality=0.2, verbosity=0.15,
+                    emoji_usage=0.6, expressiveness=0.7,
+                    message_count=20,
+                ),
+            ):
+                from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+                result = await daem0n_profile(action="introspect", user_id="/test/user")
+
+            labels = result["style_profile"]["labels"]
+            assert labels["formality"] == "very casual"
+            assert labels["verbosity"] == "terse"
+            assert labels["emoji"] == "regular emoji user"
+            assert labels["expressiveness"] == "highly expressive"
+
+    @pytest.mark.asyncio
+    async def test_introspect_no_style_profile(self):
+        """Introspect returns style_profile=None when no style memory exists."""
+        with patch("daem0nmcp.tools.daem0n_profile.get_user_context") as mock_ctx:
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.current_user = "TestUser"
+
+            async def mock_execute(query):
+                result = MagicMock()
+                result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+                result.scalar_one_or_none.return_value = None
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_profile import daem0n_profile
+
+            result = await daem0n_profile(action="introspect", user_id="/test/user")
+
+            assert result["type"] == "introspection"
+            assert result["style_profile"] is None
+
+    def test_style_guidance_text_format(self):
+        """Style guidance starts with header and ends with caveat."""
+        from daem0nmcp.style_detect import StyleProfile, build_style_guidance
+
+        profile = StyleProfile(
+            formality=0.2, verbosity=0.15,
+            emoji_usage=0.6, expressiveness=0.7,
+            message_count=10,
+        )
+        guidance = build_style_guidance(profile)
+
+        assert guidance is not None
+        assert guidance.startswith("COMMUNICATION STYLE ADAPTATION:")
+        assert "Adapt naturally" in guidance

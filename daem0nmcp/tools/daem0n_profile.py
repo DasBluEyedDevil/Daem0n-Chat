@@ -341,6 +341,56 @@ async def daem0n_profile(
         # Sort categories alphabetically for consistent output
         sorted_categories = dict(sorted(by_category.items()))
 
+        # Load style profile if available
+        try:
+            from ..style_detect import load_style_profile
+        except ImportError:
+            from daem0nmcp.style_detect import load_style_profile
+
+        style_profile = await load_style_profile(ctx, current)
+        style_data = None
+        if style_profile:
+            style_data = {
+                "formality": style_profile.formality,
+                "verbosity": style_profile.verbosity,
+                "emoji_usage": style_profile.emoji_usage,
+                "expressiveness": style_profile.expressiveness,
+                "messages_analyzed": style_profile.message_count,
+            }
+            # Add human-readable labels
+            labels = {}
+            if style_profile.formality < 0.3:
+                labels["formality"] = "very casual"
+            elif style_profile.formality < 0.5:
+                labels["formality"] = "casual"
+            elif style_profile.formality > 0.7:
+                labels["formality"] = "formal"
+            else:
+                labels["formality"] = "neutral"
+
+            if style_profile.verbosity < 0.25:
+                labels["verbosity"] = "terse"
+            elif style_profile.verbosity > 0.7:
+                labels["verbosity"] = "verbose"
+            else:
+                labels["verbosity"] = "moderate"
+
+            if style_profile.emoji_usage > 0.5:
+                labels["emoji"] = "regular emoji user"
+            elif style_profile.emoji_usage > 0.2:
+                labels["emoji"] = "occasional emoji"
+            else:
+                labels["emoji"] = "rarely/never uses emoji"
+
+            if style_profile.expressiveness > 0.6:
+                labels["expressiveness"] = "highly expressive"
+            elif style_profile.expressiveness < 0.2:
+                labels["expressiveness"] = "understated"
+            else:
+                labels["expressiveness"] = "moderate"
+
+            style_data["labels"] = labels
+
         return {
             "type": "introspection",
             "user_name": current,
@@ -348,6 +398,7 @@ async def daem0n_profile(
             "by_category": sorted_categories,
             "permanent_count": permanent_count,
             "total_categories_used": len(by_category),
+            "style_profile": style_data,
             "note": "Individual category counts may exceed total_memories because memories can belong to multiple categories.",
         }
 
