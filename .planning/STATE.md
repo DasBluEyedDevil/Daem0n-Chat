@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 6 complete. Session summarization and emotion detection both done. Phase 7 next.
+**Current focus:** Phase 7 complete. Personal knowledge graph with multi-hop relational queries. Phase 8 next.
 
 ## Current Position
 
-Phase: 6 of 9 (Conversation Intelligence)
+Phase: 7 of 9 (Knowledge Graph Adaptation)
 Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-02-08 -- Completed 06-02-PLAN.md
+Last activity: 2026-02-08 -- Completed 07-02-PLAN.md
 
-Progress: [██████████████████████████████░░░░░░░░░░░░░░░░░░░░] ~52% (14/27 plans)
+Progress: [██████████████████████████████████░░░░░░░░░░░░░░░░] ~59% (16/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 16
 - Average duration: ~8 minutes
-- Total execution time: 1.9 hours
+- Total execution time: 2.25 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [███████████████████████
 | 04 | 2/2 | 8min | 4min |
 | 05 | 2/2 | 11min | 5.5min |
 | 06 | 2/2 | 8min | 4min |
+| 07 | 2/2 | 22min | 11min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (7min), 05-02 (4min), 06-01 (4min), 06-02 (4min)
-- Trend: Consistent fast execution, averaging under 5 minutes
+- Last 5 plans: 06-01 (4min), 06-02 (4min), 07-01 (13min), 07-02 (9min)
+- Trend: Phase 7 averaged 11min/plan due to graph/model complexity; 07-02 faster than 07-01
 
 *Updated after each plan completion*
 
@@ -108,13 +109,24 @@ Recent decisions affecting current work:
 - [06-02]: Topics capped at 5 (deduplicated), unresolved threads at 3
 - [06-02]: 18 negative tones in _NEGATIVE_TONES frozenset for greeting tone awareness
 - [06-02]: Summary text 1-3 sentences, never fabricates beyond stored memory content
+- [07-01]: Keep old entity types alongside new personal types -- they coexist and age out naturally
+- [07-01]: Relationship references (my sister) extracted as relationship_ref type creating aliases, not standalone entities
+- [07-01]: Alias lookup in resolve() happens BEFORE database entity search -- aliases have priority
+- [07-01]: Only first matching person entity linked to relationship_ref (most proximate match)
+- [07-01]: process_memory returns aliases_created count alongside entities_found and refs_created
+- [07-01]: extract_concepts() made no-op (code concepts not relevant for personal graph)
+- [07-02]: Pet word matching uses a hardcoded set of common pet animals that map to entity_type='pet'
+- [07-02]: _find_connected_match checks both successors and predecessors for bidirectional entity edges
+- [07-02]: _resolve_reference tries alias table first, then direct entity name match (same priority as EntityResolver)
+- [07-02]: claude_statement_tracking added to all three briefing paths: new device, unnamed user, returning user
 
 ### Pending Todos
 
 - Some tests reference deleted tools and need migration or removal
-- 157 tests fail due to old tool references (expected, old functionality removed)
-- 670 tests pass (core functionality preserved)
+- 121 tests fail due to old tool references (expected, old functionality removed)
+- 780 tests pass (core functionality preserved)
 - TestCompactMemories and TestRememberBatch tests use old category names (pre-existing)
+- Old entity extraction tests (test_extract_function_names etc.) fail because code patterns were replaced with personal patterns
 
 ### Blockers/Concerns
 
@@ -123,9 +135,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 05:07 UTC
-Stopped at: Completed 06-02-PLAN.md (Phase 06 complete)
-Resume file: Phase 7 planning
+Last session: 2026-02-08 17:04 UTC
+Stopped at: Completed 07-02-PLAN.md (Phase 07 complete)
+Resume file: .planning/phases/08-adaptive-personality/ (phase needs research + planning)
 
 ## Phase 01 Summary
 
@@ -164,3 +176,9 @@ Phase 05 (Session Experience) is complete:
 Phase 06 (Conversation Intelligence) is complete:
 - 06-01: Rule-based emotion detection (explicit/emphasis/topic) with memory enrichment pipeline, 13 new tests
 - 06-02: Session summary generation using 2-hour time-gap heuristic with topic extraction, emotional tone, unresolved threads, and tone-aware greeting guidance, 13 new tests
+
+## Phase 07 Summary
+
+Phase 07 (Knowledge Graph Adaptation) is complete:
+- 07-01: EntityAlias/EntityRelationship models, migration 19, personal entity extraction patterns, alias-aware resolver, entity manager methods
+- 07-02: Multi-hop relational queries via query_relational(), daem0n_relate query action, Claude statement tracking guidance, 14 new tests
