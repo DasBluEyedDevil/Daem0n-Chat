@@ -140,6 +140,10 @@ class Settings(BaseSettings):
     cognitive_evolve_max_rules: int = 10
     cognitive_staleness_age_weight: float = 0.3
 
+    # Style detection (Phase 8: Adaptive Personality)
+    style_ema_alpha: float = Field(default=0.3, ge=0.0, le=1.0)  # EMA smoothing factor for style profile updates
+    style_min_messages_for_guidance: int = Field(default=5, ge=1)  # Minimum messages before generating style guidance
+
     # Code Indexing
     parse_tree_cache_maxsize: int = 200
     index_languages: List[str] = []  # Empty = all supported
