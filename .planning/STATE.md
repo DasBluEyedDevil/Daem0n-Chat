@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 8 complete. Ready for Phase 9 (Distribution).
+**Current focus:** Phase 10 (Documentation Cleanup) - rewrite README, remove obsolete docs.
 
 ## Current Position
 
-Phase: 9 of 9 (Distribution & Packaging)
-Plan: 3 of 3 in current phase
+Phase: 10 of 10 (Documentation Cleanup)
+Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-02-08 -- Completed 09-03-PLAN.md
+Last activity: 2026-02-08 -- Completed 10-02-PLAN.md (wrote fresh README.md and CHANGELOG.md for DaemonChat v1.0.0)
 
-Progress: [█████████████████████████████████████████████████] 100% (21/27 plans - All phases complete!)
+Progress: [█████████████████████████████████████████████████] 100% (23/23 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: ~7.3 minutes
-- Total execution time: 2.56 hours
+- Total plans completed: 23
+- Average duration: ~6.7 minutes
+- Total execution time: 2.60 hours
 
 **By Phase:**
 
@@ -36,10 +36,11 @@ Progress: [███████████████████████
 | 07 | 2/2 | 22min | 11min |
 | 08 | 2/2 | 10min | 5min |
 | 09 | 3/3 | 12min | 4min |
+| 10 | 2/2 | 3min | 1.5min |
 
 **Recent Trend:**
-- Last 5 plans: 08-02 (5min), 09-01 (5min), 09-02 (3min), 09-03 (4min)
-- Trend: Phase 9 completed efficiently -- all distribution paths now available
+- Last 5 plans: 09-02 (3min), 09-03 (4min), 10-01 (1min), 10-02 (2min)
+- Trend: Phase 10 complete -- all 10 phases done, DaemonChat v1.0.0 shipped
 
 *Updated after each plan completion*
 
@@ -133,18 +134,16 @@ Recent decisions affecting current work:
 - [09-01]: Both daem0nmcp and daem0nchat script entry points for backward compatibility
 - [09-01]: claude-desktop-config library used for all config operations (not hand-rolled JSON)
 - [09-01]: Platform-specific storage paths default to %LOCALAPPDATA%/DaemonChat/ on Windows (isolates from DaemonMCP's per-project .daem0nmcp/ dirs)
-- [09-01]: Model downloader primarily for Inno Setup path; MCPB relies on auto-download on first use
-- [09-02]: MCPB tools_generated=false (all 8 tools manually declared, not auto-detected)
-- [09-02]: uv server type chosen for auto-managed Python environments (no manual venv setup)
-- [09-02]: server.py wrapper at build root delegates to daem0nmcp.server:main (MCPB entry point requirement)
-- [09-02]: Icon placeholder as text note -- actual icon design is user/design decision
-- [09-02]: Platform restriction to win32 in MCPB compatibility section (project is Windows-focused)
+- [09-01]: Model downloader for Inno Setup path
+- [09-02]: DEFERRED to v2 -- MCPB Desktop Extension removed from v1 (Inno Setup covers non-technical users; MCPB ecosystem not mature)
 - [09-03]: Inno Setup installs to {localappdata}\DaemonChat (no admin required)
 - [09-03]: CPU-only PyTorch index URL used to get ~200MB wheel instead of 2GB CUDA
 - [09-03]: Pre-download embedding model during build to avoid 400MB first-run download
 - [09-03]: Pascal InitializeSetup checks for Claude Desktop before proceeding
 - [09-03]: All paths in .iss use double-quoting to handle spaces in usernames
 - [09-03]: build_inno.py uses python-build-standalone for embedded runtime
+- [10-01]: Deleted all coding-era documentation directories without git tracking (were never committed)
+- [10-01]: Confirmed README.md and CHANGELOG.md are only user-facing files needing rewrite in 10-02
 
 ### Pending Todos
 
@@ -156,13 +155,13 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-None - all phases complete.
+None.
 
 ## Session Continuity
 
-Last session: 2026-02-08 18:41 UTC
-Stopped at: Completed 09-03-PLAN.md
-Resume file: None - all phases complete
+Last session: 2026-02-08
+Stopped at: Completed 10-02-PLAN.md (wrote fresh README.md and CHANGELOG.md for DaemonChat v1.0.0)
+Resume file: N/A (all 10 phases complete - 23/23 plans done)
 
 ## Phase 01 Summary
 
@@ -218,5 +217,15 @@ Phase 08 (Adaptive Personality) is complete:
 
 Phase 09 (Distribution & Packaging) is complete:
 - 09-01: Server renamed to DaemonChat (distinct from DaemonMCP), version 1.0.0, installer modules (config_manager, health_check, post_install, model_downloader) using claude-desktop-config library, 12 new tests
-- 09-02: MCPB Desktop Extension manifest with all 8 daem0n_* tools, uv server type, build_mcpb.py script for bundle generation
+- 09-02: DEFERRED to v2 (MCPB files removed -- Inno Setup covers non-technical users; MCPB ecosystem not mature)
 - 09-03: Inno Setup installer script with LocalAppData install, build_inno.py orchestrator with CPU-only PyTorch, pre-downloaded embedding model, 6 new tests
+
+## Phase 10 Summary
+
+Phase 10 (Documentation Cleanup) is complete:
+- 10-01: Deleted all coding-era documentation (.claude/skills/, .opencode/, .claude-plugin/, docs/), audited remaining references (only README.md and CHANGELOG.md need rewrite)
+- 10-02: Wrote fresh README.md (142 lines) and CHANGELOG.md (56 lines) for DaemonChat v1.0.0, removed 1194 lines of obsolete DaemonMCP coding tool documentation, documented all 8 daem0n_* tools, zero obsolete tool references
+
+---
+
+**ALL 10 PHASES COMPLETE -- DaemonChat v1.0.0 SHIPPED**

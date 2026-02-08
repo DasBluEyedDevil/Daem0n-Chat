@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall ✓ COMPLETE
 - [x] **Phase 8: Adaptive Personality** - Learn and mirror user communication style over time ✓ COMPLETE
 - [x] **Phase 9: Distribution & Packaging** - One-click installer, auto-configuration, and first-run experience for non-technical users ✓ COMPLETE
+- [x] **Phase 10: Documentation Cleanup** - Rewrite README for conversational memory, remove obsolete coding-era docs and skills ✓ COMPLETE
 
 ## Phase Details
 
@@ -152,17 +153,32 @@ Plans:
   2. Installer automatically detects and configures Claude Desktop's MCP settings (claude_desktop_config.json) without user intervention
   3. First-run experience handles model downloads, storage initialization, and connection verification gracefully with clear progress indication
   4. Installation works on a clean Windows machine with no developer tools, spaces in username path, and standard antivirus software
-**Plans**: 3 plans in 2 waves
+**Plans**: 2 plans in 2 waves
 
 Plans:
 - [x] 09-01-PLAN.md — Co-existence & installer core: rename FastMCP server to DaemonChat, update pyproject.toml metadata, create installer/ modules (config_manager, health_check, post_install) with tests
-- [x] 09-02-PLAN.md — MCPB Desktop Extension: create manifest.json and build_mcpb.py for one-click .mcpb bundle packaging
+- [ ] ~~09-02-PLAN.md — MCPB Desktop Extension~~ **DEFERRED to v2** (Inno Setup covers non-technical users; MCPB ecosystem not mature)
 - [x] 09-03-PLAN.md — Inno Setup Windows installer: create daem0n_chat.iss script and build_inno.py orchestrator for traditional guided wizard installer
+
+### Phase 10: Documentation Cleanup
+**Goal**: All user-facing documentation accurately describes Daem0n-Chat conversational memory, with no references to coding-era tools or workflows
+**Depends on**: Phase 9
+**Requirements**: None (documentation task, not functional requirement)
+**Success Criteria** (what must be TRUE):
+  1. README.md describes Daem0n-Chat conversational memory system, installation, and the 8 daem0n_* tools
+  2. No files reference obsolete tools (commune, consult, inscribe, reflect, understand, govern, explore, maintain)
+  3. No coding-specific skills or commands remain (.claude/skills/, .opencode/commands/)
+  4. CHANGELOG.md documents v1.0.0 release with conversational memory features
+**Plans**: 2 plans in 1 wave (parallel)
+
+Plans:
+- [x] 10-01-PLAN.md — Delete obsolete docs: remove coding-era skills, commands, and docs that reference old tools
+- [x] 10-02-PLAN.md — Write new README and CHANGELOG: create fresh documentation for Daem0n-Chat v1.0.0
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could theoretically execute in parallel with Phases 5-6 if desired.
 
@@ -176,4 +192,5 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | 6. Conversation Intelligence | 2/2 | ✓ Complete | 2026-02-08 |
 | 7. Knowledge Graph Adaptation | 2/2 | ✓ Complete | 2026-02-08 |
 | 8. Adaptive Personality | 2/2 | ✓ Complete | 2026-02-08 |
-| 9. Distribution & Packaging | 3/3 | ✓ Complete | 2026-02-08 |
+| 9. Distribution & Packaging | 2/2 | ✓ Complete | 2026-02-08 |
+| 10. Documentation Cleanup | 2/2 | ✓ Complete | 2026-02-08 |
