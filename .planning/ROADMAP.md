@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Codebase Cleanup & Categories** - Strip coding modules, consolidate MCP tools, establish conversational memory categories ✓ COMPLETE
 - [x] **Phase 2: User Profiles & Multi-User** - Build user profile system with isolated per-user memory storage ✓ COMPLETE
-- [ ] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability
+- [x] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability ✓ COMPLETE
 - [ ] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay
 - [ ] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context
 - [ ] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection
@@ -67,8 +67,8 @@ Plans:
 **Plans**: 2 plans in 1 wave (parallel)
 
 Plans:
-- [ ] 03-01-PLAN.md -- Forget enhancement: add query-based semantic search, batch delete with confirm_ids, fix recall cache invalidation bug
-- [ ] 03-02-PLAN.md -- Introspection & explicit remember: add introspect action to daem0n_profile, explicit tag + forced permanence on daem0n_remember
+- [x] 03-01-PLAN.md -- Forget enhancement: add query-based semantic search, batch delete with confirm_ids, fix recall cache invalidation bug
+- [x] 03-02-PLAN.md -- Introspection & explicit remember: add introspect action to daem0n_profile, explicit tag + forced permanence on daem0n_remember
 
 ### Phase 4: Auto-Detection & Memory Decay
 **Goal**: Claude automatically notices and remembers important personal information from natural conversation without the user explicitly asking, while casual mentions naturally fade over time
@@ -170,7 +170,7 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 |-------|---------------|--------|-----------|
 | 1. Codebase Cleanup & Categories | 3/3 | ✓ Complete | 2026-02-07 |
 | 2. User Profiles & Multi-User | 3/3 | ✓ Complete | 2026-02-07 |
-| 3. Explicit Memory Capture & Control | 0/2 | Not started | - |
+| 3. Explicit Memory Capture & Control | 2/2 | ✓ Complete | 2026-02-08 |
 | 4. Auto-Detection & Memory Decay | 0/2 | Not started | - |
 | 5. Session Experience | 0/2 | Not started | - |
 | 6. Conversation Intelligence | 0/2 | Not started | - |

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 2 complete. Ready for Phase 3.
+**Current focus:** Phase 3 complete. Ready for Phase 4.
 
 ## Current Position
 
-Phase: 2 of 9 (User Profiles & Multi-User)
-Plan: 3 of 3 in current phase
+Phase: 3 of 9 (Explicit Memory Capture & Control)
+Plan: 2 of 2 in current phase
 Status: Phase complete
-Last activity: 2026-02-07 -- Completed 02-03-PLAN.md
+Last activity: 2026-02-08 -- Completed 03-02-PLAN.md
 
-Progress: [################░░░░] ~22% (6/27 plans)
+Progress: [####################] ~30% (8/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: ~13 minutes
-- Total execution time: 1.2 hours
+- Total plans completed: 8
+- Average duration: ~11 minutes
+- Total execution time: 1.3 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [################░░░░] ~22% (6/27 plans)
 |-------|-------|-------|----------|
 | 01 | 3/3 | 45min | 15min |
 | 02 | 3/3 | 28min | 9min |
+| 03 | 2/2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (14min), 02-01 (9min), 02-02 (7min), 02-03 (12min)
-- Trend: Stable ~10min/plan for Phase 02
+- Last 5 plans: 02-02 (7min), 02-03 (12min), 03-01 (3min), 03-02 (4min)
+- Trend: Accelerating -- Phase 3 both plans executed exactly as written
 
 *Updated after each plan completion*
 
@@ -68,6 +69,15 @@ Recent decisions affecting current work:
 - [02-03]: TF-IDF index stays global (IDF benefits from more docs); callers post-filter
 - [02-03]: ActiveContextManager validates memory ownership on add (prevents cross-user injection)
 - [02-03]: Default user_name="default" on all new params (backward compatible)
+- [03-01]: Three-mode dispatch in daem0n_forget (single ID, query search, batch confirm_ids)
+- [03-01]: Query mode returns candidates only -- never deletes (two-call safety pattern)
+- [03-01]: Batch delete commits once after all deletes (single transaction)
+- [03-01]: Recall cache cleared after any deletion (bug fix)
+- [03-02]: Introspect added as 6th action on daem0n_profile (keeps tool count at 8)
+- [03-02]: Memories grouped by category in introspection (multi-category memories appear in all their categories)
+- [03-02]: Content truncated to 150 chars in introspection output
+- [03-02]: is_permanent forced via SQL UPDATE after remember() to guarantee override regardless of category rules
+- [03-02]: Explicit remember guidance via tool description (is_permanent=True + tags=["explicit"])
 
 ### Pending Todos
 
@@ -84,8 +94,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-07 23:19 UTC
-Stopped at: Completed 02-03-PLAN.md (Phase 02 complete)
+Last session: 2026-02-08 02:18 UTC
+Stopped at: Completed 03-02-PLAN.md (Phase 03 complete)
 Resume file: None
 
 ## Phase 01 Summary
@@ -101,3 +111,9 @@ Phase 02 (User Profiles & Multi-User) is complete:
 - 02-01: Per-user memory isolation at data layer (user_name column, migration 18, scoped remember/recall/search)
 - 02-02: Profile tools (5 actions), multi-user briefing, user_name piping through all 8 tools, 26 tests
 - 02-03: Subsystem isolation (dreaming, active context, communities, entities, cognitive modules), 10 isolation tests
+
+## Phase 03 Summary
+
+Phase 03 (Explicit Memory Capture & Control) is complete:
+- 03-01: Enhanced daem0n_forget with semantic search (query mode) and batch delete (confirm_ids), fixed recall cache bug, 7 new tests
+- 03-02: Added introspect action to daem0n_profile (category-grouped memory audit), enhanced daem0n_remember with is_permanent flag for explicit memories, 5 new tests
