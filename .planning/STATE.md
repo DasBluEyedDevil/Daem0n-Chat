@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Claude remembers you. No blank slate, no forgetting. Every conversation builds on the last.
-**Current focus:** Phase 6 in progress. Emotion detection complete, conversation flow next.
+**Current focus:** Phase 6 complete. Session summarization and emotion detection both done. Phase 7 next.
 
 ## Current Position
 
 Phase: 6 of 9 (Conversation Intelligence)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-08 -- Completed 06-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-08 -- Completed 06-02-PLAN.md
 
-Progress: [█████████████████████████████░░░░░░░░░░░░░░░░░░░░] ~48% (13/27 plans)
+Progress: [██████████████████████████████░░░░░░░░░░░░░░░░░░░░] ~52% (14/27 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
+- Total plans completed: 14
 - Average duration: ~8 minutes
-- Total execution time: 1.8 hours
+- Total execution time: 1.9 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [███████████████████████
 | 03 | 2/2 | 7min | 3.5min |
 | 04 | 2/2 | 8min | 4min |
 | 05 | 2/2 | 11min | 5.5min |
-| 06 | 1/2 | 4min | 4min |
+| 06 | 2/2 | 8min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (4min), 05-01 (7min), 05-02 (4min), 06-01 (4min)
+- Last 5 plans: 05-01 (7min), 05-02 (4min), 06-01 (4min), 06-02 (4min)
 - Trend: Consistent fast execution, averaging under 5 minutes
 
 *Updated after each plan completion*
@@ -103,6 +103,11 @@ Recent decisions affecting current work:
 - [06-01]: Enrichment runs on ALL memories (explicit + auto-detected), not just auto
 - [06-01]: Enrichment adds to categories list (not replaces) and appends to tags
 - [06-01]: 0.60 confidence threshold for enrichment activation
+- [06-02]: SESSION_GAP_HOURS=2 constant for session boundary detection
+- [06-02]: sessions[0] is previous session since briefing runs at conversation start
+- [06-02]: Topics capped at 5 (deduplicated), unresolved threads at 3
+- [06-02]: 18 negative tones in _NEGATIVE_TONES frozenset for greeting tone awareness
+- [06-02]: Summary text 1-3 sentences, never fabricates beyond stored memory content
 
 ### Pending Todos
 
@@ -118,9 +123,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-02-08 04:58 UTC
-Stopped at: Completed 06-01-PLAN.md (Phase 06 in progress)
-Resume file: .planning/phases/06-conversation-intelligence/06-02-PLAN.md
+Last session: 2026-02-08 05:07 UTC
+Stopped at: Completed 06-02-PLAN.md (Phase 06 complete)
+Resume file: Phase 7 planning
 
 ## Phase 01 Summary
 
@@ -154,7 +159,8 @@ Phase 05 (Session Experience) is complete:
 - 05-01: Created temporal.py utility, enriched briefing with greeting_guidance and time_ago, enriched recall with time_ago, 11 new tests
 - 05-02: Priority-scored thread detection with follow-up types, 90-day staleness cutoff, recurring_since duration, mid-conversation surfacing guidance, 12 new tests
 
-## Phase 06 Summary (In Progress)
+## Phase 06 Summary
 
-Phase 06 (Conversation Intelligence) in progress:
+Phase 06 (Conversation Intelligence) is complete:
 - 06-01: Rule-based emotion detection (explicit/emphasis/topic) with memory enrichment pipeline, 13 new tests
+- 06-02: Session summary generation using 2-hour time-gap heuristic with topic extraction, emotional tone, unresolved threads, and tone-aware greeting guidance, 13 new tests
