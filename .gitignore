@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+/build/
+!daem0nmcp/ui/build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# Storage
+storage/*.db
+storage/*.json
+storage/temp/
+
+# Logs
+*.log
+logs/
+
+# Avoid re-adding
+/nul
+.daem0nmcp/
+.test_tmp/
+.tmp/
+
+# Worktrees
+.worktrees/
+CLAUDE.md
+.planning/
+
+# Internal planning & analysis
+docs/plans/
+docs/AUDIT.md
+docs/MCP_APPS_INTEGRATION_ANALYSIS.md
+docs/openspec-daem0n-integration.md
+docs/condensed_docstrings.py
+enhancements.md
+
+# Internal dev scripts
+scripts/condense_docstrings.py
+
+# Lock files
+uv.lock
+
+# Node.js
+node_modules/
+package-lock.json
