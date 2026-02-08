@@ -64,11 +64,11 @@ Plans:
   1. User can say "remember that my sister's name is Sarah" and that fact is stored, categorized, and recallable in future sessions
   2. User can ask "what do you know about me?" and receives a readable, structured summary of all stored facts organized by category
   3. User can ask Claude to forget specific memories ("forget that I told you about X") and the information is permanently removed from all storage layers (SQLite and Qdrant)
-**Plans**: TBD
+**Plans**: 2 plans in 1 wave (parallel)
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Forget enhancement: add query-based semantic search, batch delete with confirm_ids, fix recall cache invalidation bug
+- [ ] 03-02-PLAN.md -- Introspection & explicit remember: add introspect action to daem0n_profile, explicit tag + forced permanence on daem0n_remember
 
 ### Phase 4: Auto-Detection & Memory Decay
 **Goal**: Claude automatically notices and remembers important personal information from natural conversation without the user explicitly asking, while casual mentions naturally fade over time
