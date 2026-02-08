@@ -1783,3 +1783,272 @@ class TestSessionExperience:
             for mem in result["memories"]:
                 assert "time_ago" in mem
                 assert isinstance(mem["time_ago"], str)
+
+
+class TestThreadDetection:
+    """Tests for Plan 05-02: thread prioritization, follow-up types, stale exclusion, surfacing."""
+
+    # --- Pure function tests for _get_follow_up_type ---
+
+    def test_get_follow_up_type_concern_fresh(self):
+        """concern at 2 days returns 'check_in'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("concern", 2) == "check_in"
+
+    def test_get_follow_up_type_concern_moderate(self):
+        """concern at 10 days returns 'gentle_ask'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("concern", 10) == "gentle_ask"
+
+    def test_get_follow_up_type_concern_old(self):
+        """concern at 20 days returns 'open_ended'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("concern", 20) == "open_ended"
+
+    def test_get_follow_up_type_goal_fresh(self):
+        """goal at 5 days returns 'progress'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("goal", 5) == "progress"
+
+    def test_get_follow_up_type_goal_old(self):
+        """goal at 14 days returns 'reconnect'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("goal", 14) == "reconnect"
+
+    def test_get_follow_up_type_event_fresh(self):
+        """event at 1 day returns 'outcome'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("event", 1) == "outcome"
+
+    def test_get_follow_up_type_default(self):
+        """context at 10 days returns 'casual'."""
+        from daem0nmcp.tools.daem0n_briefing import _get_follow_up_type
+        assert _get_follow_up_type("context", 10) == "casual"
+
+    # --- Async tests for _get_unresolved_threads ---
+
+    @pytest.mark.asyncio
+    async def test_stale_threads_excluded(self):
+        """Threads older than 90 days are excluded from results."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+
+            # Create memories: one fresh concern (2 days), one stale concern (100 days)
+            fresh = MagicMock(spec=Memory)
+            fresh.id = 1
+            fresh.content = "Worried about interview"
+            fresh.categories = ["concern"]
+            fresh.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+            fresh.outcome = None
+            fresh.archived = False
+            fresh.is_permanent = False
+
+            stale = MagicMock(spec=Memory)
+            stale.id = 2
+            stale.content = "Old worry about taxes"
+            stale.categories = ["concern"]
+            stale.created_at = datetime.now(timezone.utc) - timedelta(days=100)
+            stale.outcome = None
+            stale.archived = False
+            stale.is_permanent = False
+
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalars.return_value = MagicMock(
+                all=MagicMock(return_value=[fresh, stale])
+            )
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            from daem0nmcp.tools.daem0n_briefing import _get_unresolved_threads
+
+            threads = await _get_unresolved_threads(ctx, "default")
+
+            assert len(threads) == 1
+            assert threads[0]["id"] == 1
+            # The stale thread (id=2) should NOT appear
+            assert all(t["id"] != 2 for t in threads)
+
+    @pytest.mark.asyncio
+    async def test_thread_priority_ordering(self):
+        """A 2-day-old concern ranks higher than a 14-day-old goal."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+
+            concern = MagicMock(spec=Memory)
+            concern.id = 10
+            concern.content = "Worried about deadline"
+            concern.categories = ["concern"]
+            concern.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+            concern.outcome = None
+            concern.archived = False
+            concern.is_permanent = False
+
+            goal = MagicMock(spec=Memory)
+            goal.id = 20
+            goal.content = "Learning Spanish"
+            goal.categories = ["goal"]
+            goal.created_at = datetime.now(timezone.utc) - timedelta(days=14)
+            goal.outcome = None
+            goal.archived = False
+            goal.is_permanent = False
+
+            mock_session = MagicMock()
+            mock_result = MagicMock()
+            mock_result.scalars.return_value = MagicMock(
+                all=MagicMock(return_value=[concern, goal])
+            )
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            from daem0nmcp.tools.daem0n_briefing import _get_unresolved_threads
+
+            threads = await _get_unresolved_threads(ctx, "default")
+
+            assert len(threads) == 2
+            # Concern should rank first (higher priority)
+            assert threads[0]["id"] == 10
+            assert threads[0]["category"] == "concern"
+            assert threads[0]["priority"] > threads[1]["priority"]
+            # Both should have follow_up_type
+            assert threads[0]["follow_up_type"] == "check_in"
+            assert threads[1]["follow_up_type"] == "reconnect"
+
+    # --- Tests for _build_thread_surfacing_guidance ---
+
+    def test_thread_surfacing_guidance_skips_top_two(self):
+        """Given 4 threads, guidance mentions only threads 3-4, not 1-2."""
+        from daem0nmcp.tools.daem0n_briefing import _build_thread_surfacing_guidance
+
+        threads = [
+            {"summary": "Thread A", "time_ago": "today", "follow_up_type": "check_in"},
+            {"summary": "Thread B", "time_ago": "yesterday", "follow_up_type": "progress"},
+            {"summary": "Thread C", "time_ago": "3 days ago", "follow_up_type": "gentle_ask"},
+            {"summary": "Thread D", "time_ago": "5 days ago", "follow_up_type": "outcome"},
+        ]
+
+        result = _build_thread_surfacing_guidance(threads)
+
+        assert result is not None
+        assert "Thread C" in result
+        assert "Thread D" in result
+        assert "Thread A" not in result
+        assert "Thread B" not in result
+        # Should include instructions
+        assert "natural" in result.lower()
+        assert "daem0n_reflect" in result
+
+    def test_thread_surfacing_guidance_none_when_few(self):
+        """Given 2 or fewer threads, returns None."""
+        from daem0nmcp.tools.daem0n_briefing import _build_thread_surfacing_guidance
+
+        threads_two = [
+            {"summary": "Thread A", "time_ago": "today", "follow_up_type": "check_in"},
+            {"summary": "Thread B", "time_ago": "yesterday", "follow_up_type": "progress"},
+        ]
+        assert _build_thread_surfacing_guidance(threads_two) is None
+
+        threads_empty = []
+        assert _build_thread_surfacing_guidance(threads_empty) is None
+
+    # --- Full integration test ---
+
+    @pytest.mark.asyncio
+    async def test_briefing_contains_thread_surfacing_guidance(self):
+        """Returning user with 4+ unresolved threads gets thread_surfacing_guidance."""
+        with patch("daem0nmcp.tools.daem0n_briefing.get_user_context") as mock_ctx:
+            from daem0nmcp.models import Memory
+
+            ctx = MagicMock()
+            ctx.user_id = "/test/user"
+            ctx.briefed = False
+            ctx.current_user = "default"
+            ctx.known_users = []
+
+            call_count = {"n": 0}
+
+            # Create 4 unresolved thread memories
+            def _make_mem(mid, content, category, days):
+                m = MagicMock(spec=Memory)
+                m.id = mid
+                m.content = content
+                m.categories = [category]
+                m.created_at = datetime.now(timezone.utc) - timedelta(days=days)
+                m.outcome = None
+                m.archived = False
+                m.is_permanent = False
+                return m
+
+            thread_mems = [
+                _make_mem(101, "Worried about job interview", "concern", 1),
+                _make_mem(102, "Learning to cook better", "goal", 3),
+                _make_mem(103, "Stressed about moving", "concern", 10),
+                _make_mem(104, "Went to that concert", "event", 2),
+            ]
+
+            async def mock_execute(query):
+                call_count["n"] += 1
+                result = MagicMock()
+
+                if call_count["n"] == 1:
+                    # Total memory count
+                    result.scalar.return_value = 20
+                    return result
+                if call_count["n"] == 2:
+                    # Distinct user_names
+                    result.all.return_value = [("TestUser",)]
+                    return result
+                if call_count["n"] == 3:
+                    # Most recent user
+                    row = MagicMock()
+                    row.user_name = "TestUser"
+                    row.last_active = datetime.now(timezone.utc)
+                    result.first.return_value = row
+                    return result
+                if call_count["n"] == 4:
+                    # _get_unresolved_threads query
+                    result.scalars.return_value = MagicMock(
+                        all=MagicMock(return_value=thread_mems)
+                    )
+                    return result
+                # All other session queries return empty
+                result.scalars.return_value = MagicMock(
+                    all=MagicMock(return_value=[])
+                )
+                return result
+
+            mock_session = MagicMock()
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            ctx.db_manager.get_session.return_value = mock_session
+
+            # Mock recall to return empty for profile/facts/routines + duration
+            ctx.memory_manager.recall = AsyncMock(return_value={"memories": []})
+            mock_ctx.return_value = ctx
+
+            from daem0nmcp.tools.daem0n_briefing import daem0n_briefing
+
+            result = await daem0n_briefing(user_id="/test/user")
+
+            # Should have unresolved_threads with priority scoring
+            assert len(result["unresolved_threads"]) >= 3
+            for thread in result["unresolved_threads"]:
+                assert "priority" in thread
+                assert "follow_up_type" in thread
+
+            # Should have thread_surfacing_guidance (>2 threads)
+            assert "thread_surfacing_guidance" in result
+            guidance = result["thread_surfacing_guidance"]
+            assert "natural" in guidance.lower()
+            assert "daem0n_reflect" in guidance
