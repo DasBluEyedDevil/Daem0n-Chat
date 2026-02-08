@@ -35,6 +35,33 @@ PERMANENT_CATEGORIES = frozenset({'fact', 'preference', 'relationship', 'routine
 SLOW_DECAY_CATEGORIES = frozenset({'interest', 'goal'})  # 90-day half-life
 FAST_DECAY_CATEGORIES = frozenset({'emotion', 'concern', 'context'})  # 30-day half-life
 
+# Personal entity types for knowledge graph (Phase 7)
+PERSONAL_ENTITY_TYPES = frozenset({
+    'person',        # People in user's life
+    'pet',           # Pets (name, type, breed)
+    'place',         # Locations (home, work, cities)
+    'organization',  # Companies, schools, groups
+    'event',         # Named events (birthday, wedding, interview)
+})
+
+# Relationship types between entities (entity-to-entity edges)
+ENTITY_RELATIONSHIP_TYPES = frozenset({
+    'knows',         # Person <-> Person general
+    'sibling_of',    # Person <-> Person
+    'parent_of',     # Person <-> Person
+    'child_of',      # Person <-> Person
+    'partner_of',    # Person <-> Person (spouse, dating)
+    'friend_of',     # Person <-> Person
+    'coworker_of',   # Person <-> Person
+    'owns',          # Person -> Pet
+    'lives_in',      # Person -> Place
+    'works_at',      # Person -> Organization
+    'attends',       # Person -> Organization (school)
+    'member_of',     # Person -> Organization
+    'located_in',    # Place/Org -> Place (nesting)
+    'related_to',    # Generic fallback
+})
+
 
 class Base(DeclarativeBase):
     pass
@@ -532,5 +559,49 @@ class MemoryEntityRef(Base):
     # ORM relationships
     memory = orm_relationship("Memory", backref="entity_refs")
     entity = orm_relationship("ExtractedEntity", backref="memory_refs")
+
+
+class EntityAlias(Base):
+    """Maps alternative references to canonical entities.
+
+    Examples:
+    - entity_id=42 (Sarah), alias="my sister", alias_type="relationship"
+    - entity_id=42 (Sarah), alias="sis", alias_type="nickname"
+    """
+    __tablename__ = "entity_aliases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_id = Column(Integer, ForeignKey("extracted_entities.id", ondelete="CASCADE"), nullable=False, index=True)
+    alias = Column(String, nullable=False, index=True)
+    alias_type = Column(String, nullable=False)  # relationship, nickname, full_name
+    user_name = Column(String, nullable=False, default="default", index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    entity = orm_relationship("ExtractedEntity", backref="aliases")
+
+
+class EntityRelationship(Base):
+    """Direct relationships between entities (entity-to-entity edges).
+
+    Unlike MemoryRelationship (memory -> memory edges),
+    this tracks entity -> entity edges:
+    - Sarah -> owns -> Max (dog)
+    - Sarah -> lives_in -> Portland
+    """
+    __tablename__ = "entity_relationships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_entity_id = Column(Integer, ForeignKey("extracted_entities.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_entity_id = Column(Integer, ForeignKey("extracted_entities.id", ondelete="CASCADE"), nullable=False, index=True)
+    relationship = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    confidence = Column(Float, default=1.0)
+    source_memory_id = Column(Integer, ForeignKey("memories.id", ondelete="SET NULL"), nullable=True)
+    user_name = Column(String, nullable=False, default="default", index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    source_entity = orm_relationship("ExtractedEntity", foreign_keys=[source_entity_id], backref="outgoing_entity_relationships")
+    target_entity = orm_relationship("ExtractedEntity", foreign_keys=[target_entity_id], backref="incoming_entity_relationships")
+    source_memory = orm_relationship("Memory", backref="entity_relationship_sources")
 
 

@@ -303,6 +303,42 @@ MIGRATIONS: List[Tuple[int, str, List[str]]] = [
         "ALTER TABLE extracted_entities ADD COLUMN user_name TEXT DEFAULT 'default';",
         "UPDATE extracted_entities SET user_name = 'default' WHERE user_name IS NULL;",
     ]),
+    (19, "Add entity_aliases and entity_relationships tables for personal knowledge graph", [
+        """
+        CREATE TABLE IF NOT EXISTS entity_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            alias TEXT NOT NULL,
+            alias_type TEXT NOT NULL,
+            user_name TEXT NOT NULL DEFAULT 'default',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (entity_id) REFERENCES extracted_entities(id) ON DELETE CASCADE
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_entity_aliases_entity ON entity_aliases(entity_id);",
+        "CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases(alias);",
+        "CREATE INDEX IF NOT EXISTS idx_entity_aliases_user ON entity_aliases(user_name);",
+        """
+        CREATE TABLE IF NOT EXISTS entity_relationships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_entity_id INTEGER NOT NULL,
+            target_entity_id INTEGER NOT NULL,
+            relationship TEXT NOT NULL,
+            description TEXT,
+            confidence REAL DEFAULT 1.0,
+            source_memory_id INTEGER,
+            user_name TEXT NOT NULL DEFAULT 'default',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_entity_id) REFERENCES extracted_entities(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_entity_id) REFERENCES extracted_entities(id) ON DELETE CASCADE,
+            FOREIGN KEY (source_memory_id) REFERENCES memories(id) ON DELETE SET NULL
+        );
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_entity_relationships_source ON entity_relationships(source_entity_id);",
+        "CREATE INDEX IF NOT EXISTS idx_entity_relationships_target ON entity_relationships(target_entity_id);",
+        "CREATE INDEX IF NOT EXISTS idx_entity_relationships_type ON entity_relationships(relationship);",
+        "CREATE INDEX IF NOT EXISTS idx_entity_relationships_user ON entity_relationships(user_name);",
+    ]),
 ]
 
 
