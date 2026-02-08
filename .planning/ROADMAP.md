@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Explicit Memory Capture & Control** - "Remember this" commands, transparency ("what do you know?"), and forget capability ✓ COMPLETE
 - [x] **Phase 4: Auto-Detection & Memory Decay** - Automatic fact extraction from natural conversation with confidence-based filtering and tuned decay ✓ COMPLETE
 - [x] **Phase 5: Session Experience** - Conversational briefing, natural greetings, topic continuity, and temporal context ✓ COMPLETE
-- [ ] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection
+- [x] **Phase 6: Conversation Intelligence** - Session summarization, emotional context storage, and contextual emotion detection ✓ COMPLETE
 - [ ] **Phase 7: Knowledge Graph Adaptation** - Personal relationship graph with multi-hop recall
 - [ ] **Phase 8: Adaptive Personality** - Learn and mirror user communication style over time
 - [ ] **Phase 9: Distribution & Packaging** - One-click installer, auto-configuration, and first-run experience for non-technical users
@@ -112,8 +112,8 @@ Plans:
 **Plans**: 2 plans in 2 waves (sequential)
 
 Plans:
-- [ ] 06-01-PLAN.md — Emotion detection & memory enrichment: create emotion_detect.py with three detection methods (explicit statements, emphasis patterns, topic sentiment), wire into daem0n_remember for automatic emotion tagging
-- [ ] 06-02-PLAN.md — Session summarization & briefing: generate previous-session summaries at briefing time using 2-hour time-gap heuristic, add emotional tone to greeting guidance
+- [x] 06-01-PLAN.md — Emotion detection & memory enrichment: create emotion_detect.py with three detection methods (explicit statements, emphasis patterns, topic sentiment), wire into daem0n_remember for automatic emotion tagging
+- [x] 06-02-PLAN.md — Session summarization & briefing: generate previous-session summaries at briefing time using 2-hour time-gap heuristic, add emotional tone to greeting guidance
 
 ### Phase 7: Knowledge Graph Adaptation
 **Goal**: Claude can map and traverse relationships between people, places, pets, and organizations in the user's life, enabling relational recall
@@ -173,7 +173,7 @@ Note: Phase 7 (Knowledge Graph) depends on Phase 4, not Phase 6, so it could the
 | 3. Explicit Memory Capture & Control | 2/2 | ✓ Complete | 2026-02-08 |
 | 4. Auto-Detection & Memory Decay | 2/2 | ✓ Complete | 2026-02-08 |
 | 5. Session Experience | 2/2 | ✓ Complete | 2026-02-08 |
-| 6. Conversation Intelligence | 0/2 | Not started | - |
+| 6. Conversation Intelligence | 2/2 | ✓ Complete | 2026-02-08 |
 | 7. Knowledge Graph Adaptation | 0/2 | Not started | - |
 | 8. Adaptive Personality | 0/2 | Not started | - |
 | 9. Distribution & Packaging | 0/3 | Not started | - |
