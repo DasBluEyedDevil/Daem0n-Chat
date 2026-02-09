@@ -51,10 +51,10 @@ if os.getenv('DAEM0NMCP_STRUCTURED_LOGS'):
 DAEMONCHAT_INSTRUCTIONS = """
 DaemonChat is a persistent memory system that survives across all conversations. It is your long-term memory. Use it proactively.
 
-CRITICAL: Every DaemonChat tool requires a `user_id` parameter. Always provide it. If you don't know the user's ID yet, ask them: "What name would you like me to remember you by?" Then use that as user_id for all subsequent calls.
+The user_id parameter is pre-configured -- you do NOT need to ask the user for it or pass it explicitly. Just call tools normally and the system handles identity automatically.
 
 START OF EVERY CONVERSATION:
-Call `daem0n_briefing(user_id='<their_username>')` FIRST, before responding. This returns the user's profile, recent topics, unresolved threads, and emotional context. Use it to greet them by name and pick up where you left off.
+Call `daem0n_briefing()` FIRST, before responding. This returns the user's profile, recent topics, unresolved threads, and emotional context. Use it to greet them by name and pick up where you left off. On the very first conversation, introduce yourself warmly and ask for the user's name naturally -- don't make it feel like a form.
 
 WHEN TO REMEMBER (daem0n_remember):
 - Explicit: User says "remember that..." -> is_permanent=True, add "explicit" tag

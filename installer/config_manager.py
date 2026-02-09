@@ -68,6 +68,7 @@ def add_daemon_chat(python_path: str, install_dir: str | None = None) -> bool:
     env = {
         "DAEM0NMCP_STORAGE_PATH": str(storage_base / "storage"),
         "DAEM0NMCP_QDRANT_PATH": str(storage_base / "qdrant"),
+        "DAEM0NMCP_USER_ID": str(storage_base),
         "PYTHONUNBUFFERED": "1",
     }
 

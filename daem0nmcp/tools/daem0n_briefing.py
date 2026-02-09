@@ -416,16 +416,17 @@ async def daem0n_briefing(
             "is_first_session": True,
             "current_user": "default",
             "tool_usage_reminder": (
-                f"IMPORTANT: Pass user_id='{effective_user_id}' to every DaemonChat tool call. "
-                "Once you learn the user's name, use daem0n_profile(action='set_name') to store it."
+                "user_id is pre-configured -- just call tools normally without passing it. "
+                "Once you learn the user's name, call daem0n_profile(action='set_name', name='...') to store it."
             ),
             "first_session_guidance": (
-                "Brand new device -- no memories yet! Introduce yourself warmly and playfully. "
-                "You're Claude, their personal memory companion. "
-                "Ask the user's name so you can remember them. "
-                "Offer to go by a different name if they'd prefer. "
-                "Weave in 2-3 natural getting-to-know-you questions "
-                "(not an interview -- keep it casual and fun)."
+                "This is your very first conversation together! You have a new long-term memory system "
+                "called DaemonChat -- everything you learn about this person will persist across all "
+                "future conversations. Introduce yourself warmly. Let them know you can remember things "
+                "about them across conversations. Ask for their name naturally as part of the conversation "
+                "-- don't make it feel like a form or a requirement. Weave in 2-3 natural getting-to-know-you "
+                "questions (not an interview -- keep it casual and fun). "
+                "Once they share their name, call daem0n_profile(action='set_name', name='...') to store it."
             ),
             "auto_detection_guidance": (
                 "As you chat, watch for personal facts the user shares naturally. "
@@ -467,8 +468,8 @@ async def daem0n_briefing(
         briefing["is_first_session"] = True
         briefing["first_session_guidance"] = (
             "This user has memories but hasn't shared their name yet. "
-            "Greet them warmly and ask for their name so you can personalize. "
-            "Use daem0n_profile(action='set_name', name='...') once you learn it."
+            "Greet them warmly and ask for their name naturally in conversation. "
+            "Once they share it, call daem0n_profile(action='set_name', name='...') to store it."
         )
         briefing["auto_detection_guidance"] = (
             "As you chat, watch for personal facts the user shares naturally. "
@@ -798,9 +799,9 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         "This ensures you can recall what YOU said, not just what the user said."
     )
 
-    # Tool usage reminder - ensures Claude always passes user_id
+    # Tool usage reminder
     response["tool_usage_reminder"] = (
-        f"IMPORTANT: Pass user_id='{ctx.user_id}' to every DaemonChat tool call. "
+        "user_id is pre-configured -- just call tools normally without passing it. "
         "Available tools: daem0n_recall (search memories), daem0n_remember (store new), "
         "daem0n_forget (delete), daem0n_profile (identity management), "
         "daem0n_relate (knowledge graph), daem0n_reflect (outcomes/verification), "
