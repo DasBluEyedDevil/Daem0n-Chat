@@ -32,8 +32,9 @@ Built across 9 implementation phases, DaemonChat provides:
 
 1. Download the installer from [Releases](https://github.com/DasBluEyedDevil/Daem0n-Chat/releases)
 2. Run the installer
-3. The installer handles everything: Python runtime, dependencies, model download, and Claude Desktop configuration
-4. DaemonChat installs to `%LOCALAPPDATA%\DaemonChat\` (no admin rights required)
+3. The installer bundles everything: Python runtime, dependencies, and the embedding model — no downloads during installation
+4. Claude Desktop is automatically configured
+5. DaemonChat installs to `%LOCALAPPDATA%\DaemonChat\` (no admin rights required)
 
 ### macOS
 
@@ -57,7 +58,7 @@ source .venv/bin/activate
 pip install -e ".[installer]"
 ```
 
-The first run will download the ModernBERT embedding model (~400 MB). This is a one-time download.
+**Note:** The first run will download the ModernBERT embedding model (~400 MB). This is a one-time download that happens automatically.
 
 #### Configure Claude Desktop
 

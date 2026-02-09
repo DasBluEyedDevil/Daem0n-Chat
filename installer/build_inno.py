@@ -20,6 +20,11 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
+# Ensure project root is on path for imports (needed when running as script)
+PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # Constants
 PYTHON_STANDALONE_VERSION = "3.12"
 # NOTE: python-build-standalone URLs follow this pattern:
@@ -131,6 +136,10 @@ def generate_requirements(output_path: Path):
 
     dependencies = pyproject.get("project", {}).get("dependencies", [])
 
+    # Include installer extras (contains claude-desktop-config needed for post_install)
+    optional_deps = pyproject.get("project", {}).get("optional-dependencies", {})
+    installer_deps = optional_deps.get("installer", [])
+
     # Write requirements with CPU-only torch index
     with open(output_path, "w") as f:
         f.write(f"--index-url {CPU_TORCH_INDEX}\n")
@@ -139,7 +148,14 @@ def generate_requirements(output_path: Path):
         for dep in dependencies:
             f.write(f"{dep}\n")
 
-    print(f"  Generated {output_path} with {len(dependencies)} dependencies")
+        # Add installer-specific dependencies
+        if installer_deps:
+            f.write("\n# Installer dependencies\n")
+            for dep in installer_deps:
+                f.write(f"{dep}\n")
+
+    total_deps = len(dependencies) + len(installer_deps)
+    print(f"  Generated {output_path} with {total_deps} dependencies")
 
 
 def install_dependencies(python_exe: Path, site_packages: Path):
@@ -147,6 +163,7 @@ def install_dependencies(python_exe: Path, site_packages: Path):
     Install dependencies into site-packages using embedded Python's pip.
 
     Uses CPU-only PyTorch index to avoid downloading CUDA wheels.
+    Uses --no-compile to skip .pyc generation (reduces size).
 
     Args:
         python_exe: Path to embedded python.exe
@@ -169,6 +186,7 @@ def install_dependencies(python_exe: Path, site_packages: Path):
         "install",
         "--target",
         str(site_packages),
+        "--no-compile",  # Skip .pyc generation to reduce size
         "-r",
         str(requirements_file),
     ]
@@ -180,6 +198,54 @@ def install_dependencies(python_exe: Path, site_packages: Path):
         print("  Dependencies installed successfully")
     else:
         print(f"  ERROR: pip install failed with code {result.returncode}")
+
+
+def strip_unnecessary_files(site_packages: Path):
+    """
+    Remove test files, __pycache__, and other unnecessary files to reduce size.
+
+    Removes:
+    - __pycache__ directories
+    - *.pyc files
+    - test/ and tests/ directories
+    - *.pdb files (debug symbols)
+    - *.dist-info directories (keep minimal metadata)
+
+    Args:
+        site_packages: Path to site-packages directory
+    """
+    print("Stripping unnecessary files from site-packages...")
+
+    removed_count = 0
+    removed_size = 0
+
+    # Patterns to remove
+    patterns_to_remove = [
+        "**/__pycache__",
+        "**/tests",
+        "**/test",
+        "**/*.pyc",
+        "**/*.pyo",
+        "**/*.pdb",  # Debug symbols
+    ]
+
+    for pattern in patterns_to_remove:
+        for path in site_packages.glob(pattern):
+            try:
+                if path.is_dir():
+                    size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+                    shutil.rmtree(path)
+                else:
+                    size = path.stat().st_size
+                    path.unlink()
+                removed_count += 1
+                removed_size += size
+            except Exception as e:
+                print(f"  Warning: Could not remove {path}: {e}")
+
+    # Convert to MB
+    removed_mb = removed_size / (1024 * 1024)
+    print(f"  Removed {removed_count} items ({removed_mb:.1f} MB)")
 
 
 def copy_application(staging_dir: Path):
@@ -271,24 +337,34 @@ def download_embedding_model(staging_dir: Path):
     except ImportError as e:
         print(f"  WARNING: Could not import model_downloader: {e}")
         print("  Model will be downloaded on first run")
+        _create_model_placeholder(models_dir)
     except Exception as e:
         print(f"  WARNING: Model download failed: {e}")
         print("  Model will be downloaded on first run")
+        _create_model_placeholder(models_dir)
 
 
-def prepare_staging(skip_model: bool = False) -> Path:
+def _create_model_placeholder(models_dir: Path):
+    """Create a placeholder file so ISCC doesn't fail on empty directory."""
+    placeholder = models_dir / "DOWNLOAD_ON_FIRST_RUN.txt"
+    placeholder.write_text(
+        "The embedding model was not bundled with this installer.\n"
+        "It will be downloaded automatically on first run (~400 MB).\n"
+    )
+
+
+def prepare_staging() -> Path:
     """
     Orchestrate staging directory preparation.
 
     Creates staging directory structure and populates with:
     - Python runtime
     - Requirements file
-    - Installed dependencies
+    - Installed dependencies (stripped of tests and __pycache__)
     - Application code
-    - Pre-downloaded embedding model (unless skip_model=True)
 
-    Args:
-        skip_model: Skip model download for faster iteration
+    Note: The embedding model is NOT bundled. It's downloaded during
+    installation with a visible progress UI.
 
     Returns:
         Path to staging directory
@@ -310,14 +386,14 @@ def prepare_staging(skip_model: bool = False) -> Path:
     site_packages = STAGING_DIR / "site-packages"
     install_dependencies(python_exe, site_packages)
 
-    # Step 4: Copy application code
+    # Step 4: Strip unnecessary files (tests, __pycache__, etc.)
+    strip_unnecessary_files(site_packages)
+
+    # Step 5: Copy application code
     copy_application(STAGING_DIR)
 
-    # Step 5: Download embedding model
-    if not skip_model:
-        download_embedding_model(STAGING_DIR)
-    else:
-        print("Skipping model download (--skip-model)")
+    # Note: Model is downloaded during installation via GUI, not bundled
+    print("Skipping model bundling (downloaded during install with progress UI)")
 
     print(f"\nStaging directory ready at {STAGING_DIR.absolute()}")
     return STAGING_DIR
@@ -382,7 +458,7 @@ def main():
 Examples:
   python installer/build_inno.py --stage-only
   python installer/build_inno.py --iscc-path "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
-  python installer/build_inno.py --clean --skip-model
+  python installer/build_inno.py --clean
         """
     )
 
@@ -403,12 +479,6 @@ Examples:
         help="Remove existing staging directory before building"
     )
 
-    parser.add_argument(
-        "--skip-model",
-        action="store_true",
-        help="Skip embedding model download (faster iteration)"
-    )
-
     args = parser.parse_args()
 
     # Clean if requested
@@ -418,7 +488,7 @@ Examples:
 
     # Stage-only mode
     if args.stage_only:
-        prepare_staging(skip_model=args.skip_model)
+        prepare_staging()
         return
 
     # Full build

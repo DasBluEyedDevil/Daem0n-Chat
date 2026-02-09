@@ -19,12 +19,20 @@ UninstallDisplayName=DaemonChat - Conversational Memory
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "staging\python\*"; DestDir: "{app}\python"; Flags: recursesubdirs ignoreversion
-Source: "staging\app\*"; DestDir: "{app}\app"; Flags: recursesubdirs ignoreversion
-Source: "staging\site-packages\*"; DestDir: "{app}\site-packages"; Flags: recursesubdirs ignoreversion
+Source: "staging\python\*"; DestDir: "{app}\python"; Flags: recursesubdirs ignoreversion; BeforeInstall: UpdateStatus('Installing Python runtime...')
+Source: "staging\site-packages\*"; DestDir: "{app}\site-packages"; Flags: recursesubdirs ignoreversion; BeforeInstall: UpdateStatus('Installing dependencies...')
+Source: "staging\app\*"; DestDir: "{app}\app"; Flags: recursesubdirs ignoreversion; BeforeInstall: UpdateStatus('Installing DaemonChat...')
 Source: "staging\installer\*"; DestDir: "{app}\installer"; Flags: recursesubdirs ignoreversion
 
 [Run]
+; Download embedding model with visible progress window
+Filename: "{app}\python\pythonw.exe"; \
+  Parameters: """{app}\installer\download_model_gui.py"""; \
+  WorkingDir: "{app}"; \
+  Flags: waituntilterminated; \
+  StatusMsg: "Downloading AI model..."
+
+; Configure Claude Desktop
 Filename: "{app}\python\python.exe"; \
   Parameters: """{app}\installer\post_install.py"" install --python-path ""{app}\python\python.exe"" --install-dir ""{app}"""; \
   WorkingDir: "{app}"; \
@@ -38,6 +46,11 @@ Filename: "{app}\python\python.exe"; \
   Flags: runhidden waituntilterminated
 
 [Code]
+procedure UpdateStatus(Status: String);
+begin
+  WizardForm.StatusLabel.Caption := Status;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ClaudeAppDataDir: String;
@@ -54,5 +67,22 @@ begin
            'Install Claude Desktop first from https://claude.ai/download, then run this installer again.',
            mbError, MB_OK);
     Result := False;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    MsgBox('DaemonChat has been installed and configured!' + #13#10 + #13#10 +
+           'What happens now:' + #13#10 +
+           '  - Claude Desktop will automatically use DaemonChat' + #13#10 +
+           '  - Claude will greet you by name at the start of conversations' + #13#10 +
+           '  - Claude will remember facts, preferences, and context you share' + #13#10 +
+           '  - All data stays private on your machine' + #13#10 + #13#10 +
+           'Please restart Claude Desktop to activate DaemonChat.' + #13#10 + #13#10 +
+           'Tip: If Claude doesn''t greet you automatically, click the "+" button ' +
+           'below the chat input and select "Start Conversation" from DaemonChat.',
+           mbInformation, MB_OK);
   end;
 end;

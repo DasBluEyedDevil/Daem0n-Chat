@@ -45,6 +45,23 @@ from .tools.daem0n_status import daem0n_status  # noqa: F401
 from .tools.daem0n_relate import daem0n_relate  # noqa: F401
 from .tools.daem0n_reflect import daem0n_reflect  # noqa: F401
 
+
+# --- MCP Prompts (clickable session starters in Claude Desktop) ---
+@mcp.prompt()
+def start_conversation() -> str:
+    """Start a new conversation with DaemonChat memory context.
+
+    Click this prompt at the beginning of a conversation to have Claude
+    retrieve your personal context, greet you by name, and pick up where
+    you left off.
+    """
+    return (
+        "Please call daem0n_briefing to retrieve my personal context, then greet me "
+        "warmly by name and reference any relevant recent topics or unresolved threads. "
+        "Remember to use my communication style preferences."
+    )
+
+
 # --- Covenant middleware setup ---
 if _FASTMCP_MIDDLEWARE_AVAILABLE:
     _covenant_middleware = CovenantMiddleware(get_state=_cm._get_context_state_for_middleware)
