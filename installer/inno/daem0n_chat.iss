@@ -25,9 +25,9 @@ Source: "staging\app\*"; DestDir: "{app}\app"; Flags: recursesubdirs ignoreversi
 Source: "staging\installer\*"; DestDir: "{app}\installer"; Flags: recursesubdirs ignoreversion
 
 [Run]
-; Download embedding model with visible progress window
-Filename: "{app}\python\pythonw.exe"; \
-  Parameters: """{app}\installer\download_model_gui.py"""; \
+; Download embedding model with visible console progress
+Filename: "{app}\python\python.exe"; \
+  Parameters: """{app}\installer\download_model_console.py"" --install-dir ""{app}"""; \
   WorkingDir: "{app}"; \
   Flags: waituntilterminated; \
   StatusMsg: "Downloading AI model..."
@@ -38,6 +38,12 @@ Filename: "{app}\python\python.exe"; \
   WorkingDir: "{app}"; \
   Flags: runhidden waituntilterminated; \
   StatusMsg: "Configuring Claude Desktop..."
+
+; Offer to open onboarding prompt if Claude needs help
+Filename: "notepad.exe"; \
+  Parameters: """{app}\installer\onboarding_prompt.txt"""; \
+  Description: "View Getting Started guide (only needed if Claude doesn't greet you by name)"; \
+  Flags: postinstall nowait skipifsilent shellexec unchecked
 
 [UninstallRun]
 Filename: "{app}\python\python.exe"; \
@@ -76,13 +82,12 @@ begin
   begin
     MsgBox('DaemonChat has been installed and configured!' + #13#10 + #13#10 +
            'What happens now:' + #13#10 +
-           '  - Claude Desktop will automatically use DaemonChat' + #13#10 +
-           '  - Claude will greet you by name at the start of conversations' + #13#10 +
-           '  - Claude will remember facts, preferences, and context you share' + #13#10 +
+           '  - Restart Claude Desktop to activate DaemonChat' + #13#10 +
+           '  - Claude should greet you and remember context automatically' + #13#10 +
            '  - All data stays private on your machine' + #13#10 + #13#10 +
-           'Please restart Claude Desktop to activate DaemonChat.' + #13#10 + #13#10 +
-           'Tip: If Claude doesn''t greet you automatically, click the "+" button ' +
-           'below the chat input and select "Start Conversation" from DaemonChat.',
+           'If Claude doesn''t greet you by name after restarting, check the' + #13#10 +
+           '"View Getting Started guide" box on the next page for a quick' + #13#10 +
+           'one-time setup prompt you can paste into Claude.',
            mbInformation, MB_OK);
   end;
 end;

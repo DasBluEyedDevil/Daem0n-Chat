@@ -46,19 +46,36 @@ if os.getenv('DAEM0NMCP_STRUCTURED_LOGS'):
     daem0n_logger.addHandler(handler)
     daem0n_logger.setLevel(logging.INFO)
 
-# Server instructions for Claude
+# Server instructions for Claude - sent automatically during MCP initialization.
+# This is the primary mechanism for teaching Claude how to use DaemonChat tools.
 DAEMONCHAT_INSTRUCTIONS = """
-DaemonChat provides persistent conversational memory. Follow these guidelines:
+DaemonChat is a persistent memory system that survives across all conversations. It is your long-term memory. Use it proactively.
 
-1. **START OF CONVERSATION**: Always call `daem0n_briefing` at the very beginning of each new conversation to retrieve the user's name, recent context, unresolved threads, and communication preferences. Greet them personally.
+CRITICAL: Every DaemonChat tool requires a `user_id` parameter. Always provide it. If you don't know the user's ID yet, ask them: "What name would you like me to remember you by?" Then use that as user_id for all subsequent calls.
 
-2. **DURING CONVERSATION**: When the user shares meaningful information (facts, preferences, concerns, goals, relationships, emotions), use `daem0n_remember` to store it. When context might be relevant, use `daem0n_recall` to search memories.
+START OF EVERY CONVERSATION:
+Call `daem0n_briefing(user_id='<their_username>')` FIRST, before responding. This returns the user's profile, recent topics, unresolved threads, and emotional context. Use it to greet them by name and pick up where you left off.
 
-3. **RELATIONSHIPS**: Use `daem0n_relate` to track connections between people, places, and things the user mentions (e.g., "my sister Sarah", "my dog Max").
+WHEN TO REMEMBER (daem0n_remember):
+- Explicit: User says "remember that..." -> is_permanent=True, add "explicit" tag
+- Auto-detect: Names, relationships, preferences, goals, concerns, life events, routines, interests -> confidence 0.70-0.95 suggest storing, >=0.95 auto-store, include "auto" tag
+- Never store: Greetings, filler, hypotheticals, temporary states, questions you asked
 
-4. **COMMUNICATION STYLE**: Adapt your tone based on the user's style preferences from the briefing (formality, verbosity, emoji usage).
+WHEN TO RECALL (daem0n_recall):
+- User references past conversations or asks "do you remember..."
+- You need context about a topic they've discussed before
+- Before giving advice on something they may have preferences about
 
-5. **PRIVACY**: All data stays local. Users can use `daem0n_forget` to remove any memories.
+CATEGORIES: fact, preference, interest, goal, concern, event, relationship, emotion, routine, context (supports multiple per memory)
+
+RELATIONSHIPS (daem0n_relate):
+Track connections between people, places, and things: "my sister Sarah", "my dog Max", "my project at work".
+
+STYLE:
+Adapt tone based on the user's communication preferences from the briefing.
+
+PRIVACY:
+All data is local to the user's machine. Users can call daem0n_forget to remove any memory.
 """.strip()
 
 # Initialize FastMCP server with instructions

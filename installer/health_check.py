@@ -7,6 +7,16 @@ This module provides health checks to verify the installation was successful.
 import sys
 from pathlib import Path
 
+# Ensure site-packages and app dir are importable when run from installer context
+_script_dir = Path(__file__).parent
+_install_dir = _script_dir.parent
+_site_packages = _install_dir / "site-packages"
+if _site_packages.exists() and str(_site_packages) not in sys.path:
+    sys.path.insert(0, str(_site_packages))
+_app_dir = _install_dir / "app"
+if _app_dir.exists() and str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
+
 
 def check_python_importable() -> tuple[bool, str]:
     """

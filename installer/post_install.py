@@ -9,6 +9,19 @@ import sys
 import argparse
 from pathlib import Path
 
+# Add parent directory, site-packages, and app to path so we can import
+# installer modules, pip dependencies (claude_desktop_config), and daem0nmcp
+_script_dir = Path(__file__).parent
+_install_dir = _script_dir.parent
+if str(_install_dir) not in sys.path:
+    sys.path.insert(0, str(_install_dir))
+_site_packages = _install_dir / "site-packages"
+if _site_packages.exists() and str(_site_packages) not in sys.path:
+    sys.path.insert(0, str(_site_packages))
+_app_dir = _install_dir / "app"
+if _app_dir.exists() and str(_app_dir) not in sys.path:
+    sys.path.insert(0, str(_app_dir))
+
 from installer.config_manager import add_daemon_chat, remove_daemon_chat
 from installer.health_check import run_health_check
 

@@ -72,8 +72,12 @@ def add_daemon_chat(python_path: str, install_dir: str | None = None) -> bool:
     }
 
     if install_dir:
-        env["PYTHONPATH"] = str(Path(install_dir) / "site-packages")
-        env["SENTENCE_TRANSFORMERS_HOME"] = str(Path(install_dir) / "models")
+        install_path = Path(install_dir)
+        # Need both site-packages (dependencies) and app (daem0nmcp module)
+        site_packages = str(install_path / "site-packages")
+        app_dir = str(install_path / "app")
+        env["PYTHONPATH"] = f"{site_packages};{app_dir}" if sys.platform == "win32" else f"{site_packages}:{app_dir}"
+        env["SENTENCE_TRANSFORMERS_HOME"] = str(storage_base / "models")
 
     changed = enable_mcp_server(config, "daem0nchat", {
         "command": python_path,

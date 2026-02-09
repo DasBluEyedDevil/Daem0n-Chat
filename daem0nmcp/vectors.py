@@ -11,15 +11,15 @@ import logging
 import struct
 from typing import Dict, List, Optional, Tuple
 
-from sentence_transformers import SentenceTransformer
-import numpy as np
+# NOTE: sentence_transformers and numpy are imported lazily inside functions
+# to avoid 30-60s module load time at server startup (would cause MCP timeout).
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
 # Global model instance (lazy loaded, shared across all contexts)
-_model: Optional[SentenceTransformer] = None
+_model = None
 
 
 def is_available() -> bool:
@@ -27,8 +27,10 @@ def is_available() -> bool:
     return True
 
 
-def _get_model() -> SentenceTransformer:
+def _get_model():
     """Get or create the embedding model (lazy loading, shared across contexts)."""
+    from sentence_transformers import SentenceTransformer
+
     global _model
 
     if _model is None:
@@ -104,6 +106,8 @@ def decode(data: bytes) -> Optional[List[float]]:
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     """Compute cosine similarity between two vectors."""
+    import numpy as np
+
     a = np.array(vec1)
     b = np.array(vec2)
 

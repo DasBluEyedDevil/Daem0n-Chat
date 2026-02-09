@@ -248,6 +248,44 @@ def strip_unnecessary_files(site_packages: Path):
     print(f"  Removed {removed_count} items ({removed_mb:.1f} MB)")
 
 
+def create_bridge_pth(staging_dir: Path):
+    """
+    Create a .pth file in Python's native site-packages to bridge to our
+    custom site-packages directory.
+
+    This is critical because PYTHONPATH only adds directories to sys.path
+    but does NOT process .pth files within those directories. Packages like
+    pywin32 require .pth file processing (pywin32.pth runs pywin32_bootstrap
+    to set up DLL search paths for pywintypes). Without this, importing
+    pywintypes fails, which cascades to mcp -> fastmcp -> server crash.
+
+    The bridge .pth file uses site.addsitedir() which both adds the directory
+    to sys.path AND processes .pth files within it.
+    """
+    print("Creating bridge .pth file for site-packages...")
+
+    native_site_packages = staging_dir / "python" / "Lib" / "site-packages"
+    native_site_packages.mkdir(parents=True, exist_ok=True)
+
+    pth_file = native_site_packages / "daemonchat.pth"
+
+    # Use sys.executable to locate paths relative to the Python binary
+    # sys.executable = {app}/python/python.exe
+    # os.path.dirname(sys.executable) = {app}/python/
+    # ../site-packages = {app}/site-packages/
+    # ../app = {app}/app/
+    pth_content = (
+        "# DaemonChat: bridge to custom site-packages with .pth processing\n"
+        "# site.addsitedir() processes .pth files (needed for pywin32)\n"
+        "import site, os, sys; site.addsitedir(os.path.normpath(os.path.join(os.path.dirname(sys.executable), '..', 'site-packages')))\n"
+        "# Add app directory for daem0nmcp module\n"
+        "import os, sys; sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(sys.executable), '..', 'app')))\n"
+    )
+
+    pth_file.write_text(pth_content)
+    print(f"  Created {pth_file}")
+
+
 def copy_application(staging_dir: Path):
     """
     Copy application code to staging directory.
@@ -389,7 +427,12 @@ def prepare_staging() -> Path:
     # Step 4: Strip unnecessary files (tests, __pycache__, etc.)
     strip_unnecessary_files(site_packages)
 
-    # Step 5: Copy application code
+    # Step 5: Create bridge .pth file in Python's native site-packages
+    # This ensures our custom site-packages directory gets proper .pth file
+    # processing (required for pywin32's pywin32_bootstrap to run)
+    create_bridge_pth(STAGING_DIR)
+
+    # Step 6: Copy application code
     copy_application(STAGING_DIR)
 
     # Note: Model is downloaded during installation via GUI, not bundled
