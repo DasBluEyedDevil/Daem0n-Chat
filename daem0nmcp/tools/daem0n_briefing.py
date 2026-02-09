@@ -415,6 +415,10 @@ async def daem0n_briefing(
             "is_new_device": True,
             "is_first_session": True,
             "current_user": "default",
+            "tool_usage_reminder": (
+                f"IMPORTANT: Pass user_id='{effective_user_id}' to every DaemonChat tool call. "
+                "Once you learn the user's name, use daem0n_profile(action='set_name') to store it."
+            ),
             "first_session_guidance": (
                 "Brand new device -- no memories yet! Introduce yourself warmly and playfully. "
                 "You're Claude, their personal memory companion. "
@@ -792,6 +796,15 @@ async def _build_user_briefing(ctx, user_name: str) -> Dict[str, Any]:
         "that needs follow-up, use daem0n_remember with tags=['claude_said'] or "
         "tags=['claude_commitment'] alongside the appropriate category. "
         "This ensures you can recall what YOU said, not just what the user said."
+    )
+
+    # Tool usage reminder - ensures Claude always passes user_id
+    response["tool_usage_reminder"] = (
+        f"IMPORTANT: Pass user_id='{ctx.user_id}' to every DaemonChat tool call. "
+        "Available tools: daem0n_recall (search memories), daem0n_remember (store new), "
+        "daem0n_forget (delete), daem0n_profile (identity management), "
+        "daem0n_relate (knowledge graph), daem0n_reflect (outcomes/verification), "
+        "daem0n_status (health check)."
     )
 
     # Build greeting guidance from gathered context
