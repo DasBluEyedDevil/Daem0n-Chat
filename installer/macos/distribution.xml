@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>DaemonChat - Conversational Memory for Claude Desktop</title>
+    <organization>chat.daemon</organization>
+    <domains enable_localSystem="false" enable_currentUserHome="true" enable_anywhere="false"/>
+
+    <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
+
+    <!-- Require macOS 12+ (minimum for python-build-standalone Python 3.12) -->
+    <os-version min="12.0"/>
+
+    <welcome language="en" mime-type="text/html"><![CDATA[
+        <html>
+        <body style="font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 20px;">
+            <h2>Welcome to DaemonChat</h2>
+            <p>DaemonChat gives Claude Desktop persistent conversational memory.
+            After installation, Claude will remember your name, preferences,
+            and context across conversations.</p>
+            <p><strong>What gets installed:</strong></p>
+            <ul>
+                <li>DaemonChat MCP server and embedded Python runtime</li>
+                <li>AI embedding model (~400 MB download during install)</li>
+                <li>Automatic Claude Desktop configuration</li>
+            </ul>
+            <p><strong>Requirements:</strong></p>
+            <ul>
+                <li>Claude Desktop must be installed</li>
+                <li>Internet connection (for model download)</li>
+            </ul>
+            <p>All data stays private on your machine. No cloud services required.</p>
+        </body>
+        </html>
+    ]]></welcome>
+
+    <conclusion language="en" mime-type="text/html"><![CDATA[
+        <html>
+        <body style="font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 20px;">
+            <h2>Installation Complete!</h2>
+            <p><strong>What happens now:</strong></p>
+            <ul>
+                <li>Restart Claude Desktop to activate DaemonChat</li>
+                <li>Claude should greet you and remember context automatically</li>
+                <li>All data stays private on your machine</li>
+            </ul>
+            <p>If Claude doesn't greet you by name after restarting, paste this
+            into a new Claude conversation:</p>
+            <blockquote style="background: #f0f0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+                Use your daem0n_briefing tool to check in with me.
+            </blockquote>
+            <p><strong>To uninstall:</strong> Run the uninstall script at<br/>
+            <code>~/Library/Application Support/DaemonChat/uninstall.sh</code></p>
+        </body>
+        </html>
+    ]]></conclusion>
+
+    <choices-outline>
+        <line choice="default">
+            <line choice="chat.daemon.DaemonChat"/>
+        </line>
+    </choices-outline>
+
+    <choice id="default"/>
+    <choice id="chat.daemon.DaemonChat" visible="false">
+        <pkg-ref id="chat.daemon.DaemonChat"/>
+    </choice>
+
+    <pkg-ref id="chat.daemon.DaemonChat" version="1.0.0">DaemonChat-component.pkg</pkg-ref>
+</installer-gui-script>

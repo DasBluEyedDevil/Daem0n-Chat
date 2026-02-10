@@ -1,0 +1,25 @@
+#!/bin/bash
+# DaemonChat macOS preinstall script
+# Verifies that Claude Desktop is installed before proceeding.
+
+set -e
+
+CLAUDE_APP="/Applications/Claude.app"
+CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/Claude"
+
+echo "Checking prerequisites..."
+
+# Check if Claude Desktop is installed
+if [ ! -d "$CLAUDE_APP" ] && [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
+    echo "ERROR: Claude Desktop does not appear to be installed."
+    echo ""
+    echo "DaemonChat requires Claude Desktop to function."
+    echo "Install Claude Desktop first from https://claude.ai/download"
+    echo "then run this installer again."
+    exit 1
+fi
+
+echo "  Claude Desktop: found"
+echo "Prerequisites satisfied."
+
+exit 0

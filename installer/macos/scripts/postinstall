@@ -1,0 +1,116 @@
+#!/bin/bash
+# DaemonChat macOS postinstall script
+# Runs after files are copied to the installation directory.
+#
+# pkgbuild provides these environment variables:
+#   $2 = install destination (e.g. /Users/username/Library/Application Support/DaemonChat)
+# When installed to user home domain, $2 is the full path.
+
+set -e
+
+INSTALL_DIR="$2"
+
+# Fallback if $2 is empty (shouldn't happen with proper pkg config)
+if [ -z "$INSTALL_DIR" ]; then
+    INSTALL_DIR="$HOME/Library/Application Support/DaemonChat"
+fi
+
+PYTHON_BIN="$INSTALL_DIR/python/bin/python3"
+INSTALLER_DIR="$INSTALL_DIR/installer"
+
+echo "DaemonChat postinstall starting..."
+echo "  Install directory: $INSTALL_DIR"
+
+# ---- Step 1: Ensure Python binary is executable ----
+echo "Setting executable permissions..."
+chmod +x "$PYTHON_BIN"
+# Also make all binaries in python/bin executable
+chmod +x "$INSTALL_DIR/python/bin/"* 2>/dev/null || true
+
+# ---- Step 2: Download embedding model ----
+echo "Downloading AI embedding model (this may take a few minutes)..."
+
+MODELS_DIR="$HOME/Library/Application Support/DaemonChat/models"
+export SENTENCE_TRANSFORMERS_HOME="$MODELS_DIR"
+
+# Set PYTHONPATH so the embedded Python can find installed packages
+export PYTHONPATH="$INSTALL_DIR/site-packages:$INSTALL_DIR/app"
+
+"$PYTHON_BIN" -c "
+import sys
+sys.path.insert(0, '$INSTALL_DIR/site-packages')
+sys.path.insert(0, '$INSTALL_DIR/app')
+sys.path.insert(0, '$INSTALL_DIR/installer')
+from installer.model_downloader import download_with_console_progress
+from pathlib import Path
+models_dir = Path('$MODELS_DIR')
+download_with_console_progress(models_dir=models_dir)
+" || echo "  WARNING: Model download failed. It will download on first use."
+
+# ---- Step 3: Configure Claude Desktop ----
+echo "Configuring Claude Desktop..."
+
+"$PYTHON_BIN" "$INSTALLER_DIR/post_install.py" install \
+    --python-path "$PYTHON_BIN" \
+    --install-dir "$INSTALL_DIR" \
+    --skip-health-check || echo "  WARNING: Claude Desktop configuration may have failed."
+
+# ---- Step 4: Create uninstall script ----
+echo "Creating uninstall script..."
+
+cat > "$INSTALL_DIR/uninstall.sh" << 'UNINSTALL_EOF'
+#!/bin/bash
+# DaemonChat Uninstaller
+# Removes DaemonChat and its Claude Desktop configuration.
+
+set -e
+
+INSTALL_DIR="$HOME/Library/Application Support/DaemonChat"
+PYTHON_BIN="$INSTALL_DIR/python/bin/python3"
+
+echo "Uninstalling DaemonChat..."
+
+# Remove Claude Desktop configuration
+if [ -x "$PYTHON_BIN" ]; then
+    PYTHONPATH="$INSTALL_DIR/site-packages:$INSTALL_DIR/app" \
+        "$PYTHON_BIN" "$INSTALL_DIR/installer/post_install.py" uninstall 2>/dev/null || true
+fi
+
+# Remove installation directory
+echo "Removing installation files..."
+rm -rf "$INSTALL_DIR"
+
+# Remove storage data (ask first)
+STORAGE_DIR="$HOME/Library/Application Support/DaemonChat"
+if [ -d "$STORAGE_DIR/storage" ] || [ -d "$STORAGE_DIR/qdrant" ]; then
+    echo ""
+    echo "DaemonChat data directories found:"
+    echo "  $STORAGE_DIR/storage"
+    echo "  $STORAGE_DIR/qdrant"
+    echo ""
+    read -p "Delete all DaemonChat data? This cannot be undone. [y/N] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -rf "$STORAGE_DIR"
+        echo "Data removed."
+    else
+        echo "Data preserved at $STORAGE_DIR"
+    fi
+fi
+
+echo ""
+echo "DaemonChat has been uninstalled."
+echo "Restart Claude Desktop to complete the removal."
+UNINSTALL_EOF
+
+chmod +x "$INSTALL_DIR/uninstall.sh"
+
+# ---- Step 5: Forget pkg receipt (allows clean reinstall) ----
+# This runs as the installing user, so pkgutil --forget works for user-domain installs
+pkgutil --forget "chat.daemon.DaemonChat" 2>/dev/null || true
+
+echo ""
+echo "DaemonChat installation complete!"
+echo "Restart Claude Desktop to activate DaemonChat."
+
+exit 0
