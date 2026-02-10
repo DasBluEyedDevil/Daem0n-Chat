@@ -1,0 +1,183 @@
+name: Build macOS Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-macos
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14  # Apple Silicon (M1)
+          - arch: x86_64
+            runner: macos-13  # Intel
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Python standalone runtime
+        uses: actions/cache@v4
+        with:
+          path: installer/macos/staging/python
+          key: python-standalone-${{ matrix.arch }}-3.12.7
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: installer/macos/staging/site-packages
+          key: macos-deps-${{ matrix.arch }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            macos-deps-${{ matrix.arch }}-
+
+      - name: Prepare staging directory
+        run: python installer/build_macos.py --arch ${{ matrix.arch }} --stage-only
+
+      - name: Ensure scripts are executable
+        run: chmod +x installer/macos/scripts/*
+
+      - name: Build component package
+        run: |
+          mkdir -p installer/macos/output
+
+          pkgbuild \
+            --root installer/macos/staging \
+            --identifier chat.daemon.DaemonChat \
+            --version ${{ github.event.inputs.version || '1.0.0' }} \
+            --install-location "/Library/Application Support/DaemonChat" \
+            --scripts installer/macos/scripts \
+            installer/macos/output/DaemonChat-component.pkg
+
+      - name: Build product archive
+        run: |
+          productbuild \
+            --distribution installer/macos/distribution.xml \
+            --package-path installer/macos/output \
+            installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}-unsigned.pkg
+
+      # ---- Code Signing (conditional on secrets being configured) ----
+      # Secrets can't be directly tested in `if` conditions, so we detect
+      # availability via an env var check in a dedicated step.
+
+      - name: Check signing secrets availability
+        id: check_signing
+        env:
+          CERT: ${{ secrets.MACOS_INSTALLER_CERT_BASE64 }}
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "Signing secrets not configured — building unsigned package."
+          fi
+
+      - name: Install signing certificate
+        if: steps.check_signing.outputs.available == 'true'
+        env:
+          MACOS_INSTALLER_CERT_BASE64: ${{ secrets.MACOS_INSTALLER_CERT_BASE64 }}
+          MACOS_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/installer_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+
+          # Decode certificate
+          echo -n "$MACOS_INSTALLER_CERT_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificate
+          security import $CERTIFICATE_PATH -P "$MACOS_INSTALLER_CERT_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Find the installer signing identity
+          IDENTITY=$(security find-identity -v -p basic $KEYCHAIN_PATH | grep "Developer ID Installer" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "SIGNING_IDENTITY=$IDENTITY" >> $GITHUB_ENV
+          echo "Found signing identity: $IDENTITY"
+
+      - name: Sign package
+        if: steps.check_signing.outputs.available == 'true'
+        run: |
+          productsign \
+            --sign "${{ env.SIGNING_IDENTITY }}" \
+            installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}-unsigned.pkg \
+            installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}.pkg
+
+          # Remove unsigned package
+          rm installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}-unsigned.pkg
+
+      - name: Check notarization secrets availability
+        if: steps.check_signing.outputs.available == 'true'
+        id: check_notarization
+        env:
+          AID: ${{ secrets.APPLE_ID }}
+          NP: ${{ secrets.NOTARIZATION_PASSWORD }}
+        run: |
+          if [ -n "$AID" ] && [ -n "$NP" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "Notarization secrets not configured — skipping notarization."
+          fi
+
+      - name: Notarize package
+        if: steps.check_notarization.outputs.available == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.TEAM_ID }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+        run: |
+          PKG_PATH="installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}.pkg"
+
+          echo "Submitting for notarization..."
+          xcrun notarytool submit "$PKG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$NOTARIZATION_PASSWORD" \
+            --wait
+
+          echo "Stapling notarization ticket..."
+          xcrun stapler staple "$PKG_PATH"
+
+      - name: Rename unsigned package (when not signing)
+        if: steps.check_signing.outputs.available != 'true'
+        run: |
+          mv installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}-unsigned.pkg \
+             installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}.pkg
+
+      # ---- Cleanup & Upload ----
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-macos-${{ matrix.arch }}
+          path: installer/macos/output/DaemonChat-${{ github.event.inputs.version || '1.0.0' }}-${{ matrix.arch }}.pkg
+          retention-days: 30
